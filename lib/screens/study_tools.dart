@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../backend.dart';
@@ -110,8 +111,20 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
     if(value.isEmpty){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('اكتب المحتوى أو التفاصيل أولاً')));return;}
     setState(()=>busy=true);
     try{
+      final task = switch (widget.tool.title) {
+        'AI Study Assistant' => 'chat',
+        'PDF Analyzer' => 'pdf',
+        'Smart Summarizer' => 'summarize',
+        'Quiz Generator' => 'quiz',
+        'Flashcards' => 'flashcards',
+        'Study Planner' => 'planner',
+        'AI Explainer' => 'explain',
+        'Progress Analytics' => 'analytics',
+        _ => 'chat',
+      };
       final result=await supabase.functions.invoke('ai-chat',body:{
         'question':'${widget.tool.prompt}\n\nمدخلات الطالب:\n$value',
+        'task':task,
         'retrieve':false,
       });
       final data=Map<String,dynamic>.from(result.data as Map);
