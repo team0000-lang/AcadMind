@@ -399,14 +399,29 @@ class SubjectDetailPage extends StatelessWidget {
   Future<Map<String, List<Map<String, dynamic>>>> loadContent() async {
     final id = subject['id'];
     final lectures = await supabase.from('lectures').select('id,title,topic,description,notes,lecture_number').eq('subject_id', id).eq('is_active', true).order('display_order');
-    final videos = await supabase.from('youtube_resources').select('id,title,youtube_url,description,channel').eq('subject_id', id).eq('is_active', true).order('display_order');
+    final videos = await supabase.from('youtube_resources').select('id,title,youtube_url,lecture_id,description,channel').eq('subject_id', id).eq('is_active', true).isFilter('deleted_at', null).order('display_order');
     final folders = await supabase.from('drive_folders').select('id,folder_name,folder_url,description').eq('subject_id', id).eq('is_active', true).order('display_order');
     return {'lectures': List<Map<String, dynamic>>.from(lectures), 'videos': List<Map<String, dynamic>>.from(videos), 'folders': List<Map<String, dynamic>>.from(folders)};
   }
 
-  Future<void> openLink(String value) async {
-    final uri = Uri.tryParse(value);
-    if (uri != null && uri.scheme == 'https') await launchUrl(uri, mode: LaunchMode.externalApplication);
+  Future<void> openLink(BuildContext context, String value) async {
+    final uri = Uri.tryParse(value.trim());
+    if (uri == null || uri.scheme != 'https') {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('الرابط غير صالح')));
+      }
+      return;
+    }
+    try {
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!opened && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تعذر فتح الرابط. تأكد من وجود التطبيق أو المتصفح المناسب.')));
+      }
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تعذر فتح الرابط: $error')));
+      }
+    }
   }
 
   @override Widget build(BuildContext c) => Scaffold(
@@ -417,18 +432,51 @@ class SubjectDetailPage extends StatelessWidget {
         if (s.hasError) return _ErrorBox(message: 'تعذر تحميل محتوى المادة: ${s.error}');
         if (!s.hasData) return const Center(child: CircularProgressIndicator());
         final data = s.data!;
+        final generalVideos = data['videos']!.where((item) => item['lecture_id'] == null).toList();
         return ListView(padding: const EdgeInsets.all(12), children: [
           const Text('المحاضرات', style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
           if (data['lectures']!.isEmpty) const _EmptyBox(text: 'لا توجد محاضرات مضافة بعد'),
-          ...data['lectures']!.map((e) => Card(child: ListTile(leading: const Icon(Icons.play_lesson_outlined), title: Text(e['title'] as String), subtitle: Text((e['topic'] ?? e['description'] ?? '') as String)))),
+          ...data['lectures']!.map((lecture) {
+            final linkedVideos = data['videos']!.where((video) => video['lecture_id'] == lecture['id']).toList();
+            return Card(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 7),
+                    leading: const Icon(Icons.menu_book_rounded),
+                    title: Text(lecture['title'] as String, style: const TextStyle(fontWeight: FontWeight.w800)),
+                    subtitle: Text((lecture['topic'] ?? lecture['description'] ?? '') as String),
+                  ),
+                  if (linkedVideos.isNotEmpty) ...[
+                    const Divider(height: 1),
+                    ...linkedVideos.map((video) => ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.play_circle_fill_rounded, color: Color(0xFFDF4545)),
+                      title: Text(video['title'] as String, style: const TextStyle(fontWeight: FontWeight.w700)),
+                      subtitle: Text((video['channel'] ?? 'فيديو شرح المحاضرة').toString()),
+                      trailing: const Icon(Icons.open_in_new_rounded, size: 18),
+                      onTap: () => openLink(c, video['youtube_url'] as String),
+                    )),
+                  ],
+                ]),
+              ),
+            );
+          }),
           const Divider(height: 32),
-          const Text('فيديوهات الشرح', style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
-          if (data['videos']!.isEmpty) const _EmptyBox(text: 'لا توجد فيديوهات مضافة بعد'),
-          ...data['videos']!.map((e) => Card(child: ListTile(leading: const Icon(Icons.play_circle_outline), title: Text(e['title'] as String), subtitle: Text((e['channel'] ?? e['description'] ?? '') as String), trailing: const Icon(Icons.open_in_new), onTap: () => openLink(e['youtube_url'] as String)))),
+          const Text('فيديوهات إضافية للمادة', style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
+          if (generalVideos.isEmpty) const _EmptyBox(text: 'لا توجد فيديوهات إضافية خارج المحاضرات'),
+          ...generalVideos.map((e) => Card(child: ListTile(
+            leading: const Icon(Icons.play_circle_outline_rounded, color: Color(0xFFDF4545)),
+            title: Text(e['title'] as String),
+            subtitle: Text((e['channel'] ?? e['description'] ?? '') as String),
+            trailing: const Icon(Icons.open_in_new_rounded),
+            onTap: () => openLink(c, e['youtube_url'] as String),
+          ))),
           const Divider(height: 32),
           const Text('ملفات ومجلدات المادة', style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
           if (data['folders']!.isEmpty) const _EmptyBox(text: 'لا توجد روابط ملفات مضافة بعد'),
-          ...data['folders']!.map((e) => Card(child: ListTile(leading: const Icon(Icons.folder_open), title: Text(e['folder_name'] as String), subtitle: Text((e['description'] ?? '') as String), trailing: const Icon(Icons.open_in_new), onTap: () => openLink(e['folder_url'] as String)))),
+          ...data['folders']!.map((e) => Card(child: ListTile(leading: const Icon(Icons.folder_open), title: Text(e['folder_name'] as String), subtitle: Text((e['description'] ?? '') as String), trailing: const Icon(Icons.open_in_new), onTap: () => openLink(c, e['folder_url'] as String)))),
         ]);
       },
     ),
@@ -792,10 +840,14 @@ class _AiPageState extends State<AiPage> {
         final detailText = detail is Map
             ? (detail['error'] ?? detail['message'] ?? '').toString()
             : (detail?.toString() ?? '');
-        final readable = detailText.contains('GEMINI_API_KEY') ||
-                detailText.toLowerCase().contains('not configured')
-            ? 'خدمة الذكاء الاصطناعي غير مهيأة على الخادم بعد. لازم مالك التطبيق يضيف مفتاح Gemini في Supabase Secrets.'
-            : (detailText.isEmpty ? (e.reasonPhrase ?? 'حاول مرة أخرى.') : detailText);
+        final readable = e.status == 401
+            ? 'جلسة الدخول غير موجودة أو انتهت. سجّل الخروج ثم ادخل إلى حسابك مرة أخرى.'
+            : (e.status == 504
+                ? 'خدمة Gemini اتأخرت في الرد. جرّب سؤالًا أقصر بعد لحظات.'
+                : (detailText.contains('GEMINI_API_KEY') ||
+                    detailText.toLowerCase().contains('not configured')
+                    ? 'خدمة الذكاء الاصطناعي غير مهيأة على الخادم بعد. راجع إعداد GEMINI_API_KEY في Supabase Secrets.'
+                    : (detailText.isEmpty ? (e.reasonPhrase ?? 'حاول مرة أخرى.') : detailText)));
         setState(() => messages.add({
           'role': 'assistant',
           'content': 'تعذر تشغيل المساعد: ' + readable,
@@ -1404,7 +1456,17 @@ class _ProfilePageState extends State<ProfilePage> {
               const SizedBox(height: 9),
               SizedBox(width: double.infinity, child: OutlinedButton.icon(
                 onPressed: () async {
-                  await supabase.auth.signOut();
+                  try {
+                    await supabase.auth.signOut();
+                  } on AuthException catch (error) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تعذر تسجيل الخروج: ${error.message}')));
+                    }
+                  } catch (error) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تعذر تسجيل الخروج: $error')));
+                    }
+                  }
                 },
                 icon: const Icon(Icons.logout_rounded),
                 label: const Text('تسجيل الخروج'),
