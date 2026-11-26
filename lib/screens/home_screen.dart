@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -1107,13 +1108,53 @@ class _ChatBubble extends StatelessWidget {
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
                   Icon(Icons.auto_awesome_rounded, size: 15, color: colors.primary),
                   const SizedBox(width: 6),
-                  Text('AcadMind AI', style: TextStyle(color: colors.primary, fontSize: 11, fontWeight: FontWeight.w800)),
+                  Text('إجابة AcadMind', style: TextStyle(color: colors.primary, fontSize: 11, fontWeight: FontWeight.w800)),
+                  const Spacer(),
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    constraints: const BoxConstraints.tightFor(width: 30, height: 30),
+                    padding: EdgeInsets.zero,
+                    tooltip: 'نسخ الإجابة',
+                    icon: Icon(Icons.copy_rounded, size: 15, color: colors.onSurfaceVariant),
+                    onPressed: () async {
+                      await Clipboard.setData(ClipboardData(text: message['content'].toString()));
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('تم نسخ الإجابة')),
+                        );
+                      }
+                    },
+                  ),
                 ]),
               ),
               if (isUser)
                 Text(message['content'] as String, style: const TextStyle(color: Colors.white, height: 1.55, fontSize: 14))
               else
-                MarkdownBody(data: message['content'] as String, selectable: true, styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(p: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.6))),
+                Directionality(
+                  textDirection: TextDirection.rtl,
+                  child: MarkdownBody(
+                    data: message['content'] as String,
+                    selectable: true,
+                    styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+                      p: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.75, fontSize: 14),
+                      h1: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900, height: 1.45),
+                      h2: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900, height: 1.45),
+                      h3: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800, height: 1.4),
+                      listBullet: TextStyle(color: colors.primary, fontWeight: FontWeight.w900),
+                      code: TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 12,
+                        color: colors.primary,
+                        backgroundColor: colors.surfaceContainerHighest,
+                      ),
+                      codeblockDecoration: BoxDecoration(
+                        color: colors.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(13),
+                        border: Border.all(color: colors.outlineVariant.withValues(alpha: .7)),
+                      ),
+                    ),
+                  ),
+                ),
               if (sources.isNotEmpty) ...[
                 const SizedBox(height: 9),
                 Divider(height: 1, color: colors.outlineVariant),
