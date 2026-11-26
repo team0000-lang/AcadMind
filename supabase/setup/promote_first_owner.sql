@@ -5,10 +5,10 @@ update public.profiles p
 set role = 'owner', status = 'active'
 from auth.users u
 where p.id = u.id
-  and lower(u.email) = lower('REPLACE_WITH_YOUR_SIGNUP_EMAIL')
+  and lower(u.email) = lower('mohamedhosney414@gmail.com')
   and p.role = 'student';
 
 -- Verify the result:
 select id, email, role, status
 from public.profiles
-where lower(email) = lower('REPLACE_WITH_YOUR_SIGNUP_EMAIL');
+where lower(email) = lower('mohamedhosney414@gmail.com');
