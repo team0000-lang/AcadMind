@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
@@ -1471,6 +1472,541 @@ class _ProfilePageState extends State<ProfilePage> {
     );
     name.dispose();
     phone.dispose();
+  }
+
+  bool get _isAnonymousSession {
+    final token = supabase.auth.currentSession?.accessToken;
+    if (token == null) return false;
+    final parts = token.split('.');
+    if (parts.length != 3) return false;
+    try {
+      final payload = jsonDecode(
+        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+      );
+      return payload is Map && payload['is_anonymous'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> upgradeGuestAccount() async {
+    final name = TextEditingController();
+    final emailInput = TextEditingController();
+    final otp = TextEditingController();
+    final password = TextEditingController();
+    final confirm = TextEditingController();
+    final userId = supabase.auth.currentUser?.id;
+    var phase = 0;
+    var busy = false;
+
+    if (userId == null || !_isAnonymousSession) return;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: Text(phase == 0 ? 'حفظ حساب الضيف' : 'تأكيد البريد وإنشاء كلمة المرور'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: phase == 0
+                  ? [
+                      const Text(
+                        'هنحوّل حساب الضيف الحالي إلى حساب دائم مع الاحتفاظ بنفس الجدول والمجموعة والسكشن.',
+                        style: TextStyle(fontSize: 12, height: 1.6),
+                      ),
+                      const SizedBox(height: 14),
+                      TextField(
+                        controller: name,
+                        textInputAction: TextInputAction.next,
+                        decoration: const InputDecoration(labelText: 'الاسم بالكامل'),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: emailInput,
+                        keyboardType: TextInputType.emailAddress,
+                        textDirection: TextDirection.ltr,
+                        textAlign: TextAlign.left,
+                        decoration: const InputDecoration(labelText: 'البريد الإلكتروني'),
+                      ),
+                      const SizedBox(height: 10),
+                      const Text(
+                        'هنرسل لك رمز تأكيد من 6 أرقام. لازم تأكد البريد قبل إنشاء كلمة المرور.',
+                        style: TextStyle(fontSize: 10, color: Colors.grey, height: 1.5),
+                      ),
+                    ]
+                  : [
+                      const Text(
+                        'اكتب رمز التأكيد المرسل إلى بريدك، وبعدها اختار كلمة مرور لتسجيل الدخول مستقبلاً.',
+                        style: TextStyle(fontSize: 12, height: 1.6),
+                      ),
+                      const SizedBox(height: 14),
+                      TextField(
+                        controller: otp,
+                        keyboardType: TextInputType.number,
+                        textDirection: TextDirection.ltr,
+                        textAlign: TextAlign.center,
+                        maxLength: 6,
+                        decoration: const InputDecoration(labelText: 'رمز التأكيد (6 أرقام)'),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: password,
+                        obscureText: true,
+                        decoration: const InputDecoration(labelText: 'كلمة المرور الجديدة'),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: confirm,
+                        obscureText: true,
+                        decoration: const InputDecoration(labelText: 'تأكيد كلمة المرور'),
+                      ),
+                    ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: busy ? null : () => Navigator.pop(dialogContext),
+              child: const Text('إلغاء'),
+            ),
+            FilledButton(
+              onPressed: busy
+                  ? null
+                  : () async {
+                      if (phase == 0) {
+                        final emailValue = emailInput.text.trim();
+                        if (name.text.trim().isEmpty ||
+                            !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+
+    final password = TextEditingController();
+    final confirm = TextEditingController();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('تغيير كلمة المرور'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(controller: password, obscureText: true,
+            decoration: const InputDecoration(labelText: 'كلمة المرور الجديدة')),
+          const SizedBox(height: 12),
+          TextField(controller: confirm, obscureText: true,
+            decoration: const InputDecoration(labelText: 'تأكيد كلمة المرور')),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('إلغاء')),
+          FilledButton(
+            onPressed: () async {
+              if (password.text.length < 8 || password.text != confirm.text) {
+                ScaffoldMessenger.of(dialogContext).showSnackBar(
+                  const SnackBar(content: Text('تأكد من تطابق كلمتي المرور وأن تكون 8 أحرف على الأقل')),
+                );
+                return;
+              }
+              try {
+                await supabase.auth.updateUser(UserAttributes(password: password.text));
+                if (!dialogContext.mounted) return;
+                Navigator.pop(dialogContext);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('تم تغيير كلمة المرور بنجاح')),
+                );
+              } on AuthException catch (e) {
+                if (dialogContext.mounted) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(content: Text(e.message)));
+                }
+              } catch (e) {
+                if (dialogContext.mounted) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(content: Text('تعذر تغيير كلمة المرور: ' + e.toString())));
+                }
+              }
+            },
+            child: const Text('تحديث كلمة المرور'),
+          ),
+        ],
+      ),
+    );
+    password.dispose();
+    confirm.dispose();
+  }
+
+  Future<void> openAcademicSetup() async {
+    final changed = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => const StudentSetupScreen(forceEdit: true)),
+    );
+    if (changed == true) reload();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return FutureBuilder<Map<String, dynamic>>(
+      future: future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError || !snapshot.hasData) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.person_off_rounded, size: 42),
+                const SizedBox(height: 12),
+                const Text('مش قادرين نحمّل بيانات الحساب'),
+                const SizedBox(height: 12),
+                FilledButton.icon(onPressed: reload, icon: const Icon(Icons.refresh_rounded), label: const Text('إعادة المحاولة')),
+              ]),
+            ),
+          );
+        }
+
+        final p = snapshot.data!;
+        final isGuest = _isAnonymousSession;
+        final authUser = supabase.auth.currentUser;
+        final fullName = (p['full_name'] ?? '').toString().trim();
+        final displayName = fullName.isEmpty ? 'طالب AcadMind' : fullName;
+        final email = (authUser?.email ?? p['email'] ?? (isGuest ? 'حساب ضيف' : 'غير متاح')).toString();
+        final year = related(p, 'academic_years');
+        final group = related(p, 'groups');
+        final section = related(p, 'sections');
+        final scope = [group, section].where((value) => value.isNotEmpty).join(' • ');
+        final isOwner = p['role'] == 'owner';
+        final initial = displayName.isEmpty ? 'A' : displayName.substring(0, 1);
+
+        return Directionality(
+          textDirection: TextDirection.rtl,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 34),
+            children: [
+              Row(children: [
+                const Expanded(child: Text('حسابي', style: TextStyle(fontSize: 23, fontWeight: FontWeight.w900))),
+                IconButton(onPressed: reload, tooltip: 'تحديث البيانات', icon: const Icon(Icons.refresh_rounded)),
+              ]),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topRight,
+                    end: Alignment.bottomLeft,
+                    colors: [Color(0xFF171A3D), Color(0xFF39328F), Color(0xFF6255E8)],
+                  ),
+                  borderRadius: BorderRadius.circular(25),
+                  boxShadow: [BoxShadow(color: const Color(0xFF5145D6).withValues(alpha: .15), blurRadius: 22, offset: const Offset(0, 9))],
+                ),
+                child: Row(children: [
+                  CircleAvatar(
+                    radius: 31,
+                    backgroundColor: Colors.white.withValues(alpha: .16),
+                    child: Text(initial, style: const TextStyle(color: Colors.white, fontSize: 27, fontWeight: FontWeight.w900)),
+                  ),
+                  const SizedBox(width: 13),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(displayName, maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 4),
+                    Text(email, maxLines: 1, overflow: TextOverflow.ellipsis,
+                      textDirection: TextDirection.ltr,
+                      style: const TextStyle(color: Colors.white70, fontSize: 11)),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                      decoration: BoxDecoration(color: Colors.white.withValues(alpha: .14), borderRadius: BorderRadius.circular(20)),
+                      child: Text(isOwner ? 'مالك النظام' : (isGuest ? 'حساب ضيف' : 'حساب طالب'),
+                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700)),
+                    ),
+                  ])),
+                ]),
+              ),
+              if (isGuest) ...[
+                const SizedBox(height: 18),
+                Card(
+                  child: ListTile(
+                    leading: const CircleAvatar(
+                      backgroundColor: Color(0xFFECEBFF),
+                      child: Icon(Icons.shield_outlined, color: Color(0xFF5145D6)),
+                    ),
+                    title: const Text('احفظ حسابك ولا تفقد بياناتك', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13)),
+                    subtitle: const Text('اربط بريدك الإلكتروني بحساب الضيف واحتفظ بجدولك ومجموعتك والسكشن.', style: TextStyle(fontSize: 10, height: 1.5)),
+                    trailing: const Icon(Icons.chevron_left_rounded),
+                    onTap: upgradeGuestAccount,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 25),
+              const _AccountHeading(title: 'البيانات الشخصية', subtitle: 'معلومات حسابك في AcadMind'),
+              const SizedBox(height: 10),
+              Card(
+                child: Column(children: [
+                  _AccountInfoTile(icon: Icons.alternate_email_rounded, title: 'البريد الإلكتروني', value: email),
+                  const Divider(height: 1, indent: 16, endIndent: 16),
+                  _AccountInfoTile(icon: Icons.phone_rounded, title: 'رقم الهاتف',
+                    value: (p['phone'] ?? '').toString().isEmpty ? 'غير مضاف' : p['phone'].toString()),
+                  const Divider(height: 1, indent: 16, endIndent: 16),
+                  _AccountInfoTile(icon: Icons.school_rounded, title: 'السنة الدراسية',
+                    value: year.isEmpty ? 'لم يتم التحديد' : year),
+                  const Divider(height: 1, indent: 16, endIndent: 16),
+                  _AccountInfoTile(icon: Icons.verified_user_outlined, title: 'حالة الحساب',
+                    value: (p['status'] ?? 'غير معروف').toString() + ' • ' + (p['role'] ?? 'student').toString()),
+                ]),
+              ),
+              const SizedBox(height: 22),
+              const _AccountHeading(title: 'بياناتك الأكاديمية', subtitle: 'المجموعة والسكشن المستخدمان في عرض الجدول'),
+              const SizedBox(height: 10),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Row(children: [
+                      Container(width: 42, height: 42,
+                        decoration: BoxDecoration(color: const Color(0xFF6255E8).withValues(alpha: .11), borderRadius: BorderRadius.circular(14)),
+                        child: const Icon(Icons.groups_rounded, color: Color(0xFF6255E8))),
+                      const SizedBox(width: 11),
+                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        const Text('المجموعة والسكشن', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13)),
+                        const SizedBox(height: 4),
+                        Text(scope.isEmpty ? 'لم يتم تحديدهما بعد' : scope,
+                          style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12)),
+                      ])),
+                    ]),
+                    if (!isOwner) ...[
+                      const SizedBox(height: 15),
+                      SizedBox(width: double.infinity, child: OutlinedButton.icon(
+                        onPressed: openAcademicSetup,
+                        icon: const Icon(Icons.edit_outlined, size: 18),
+                        label: const Text('تغيير المجموعة والسكشن'),
+                      )),
+                    ],
+                  ]),
+                ),
+              ),
+              const SizedBox(height: 22),
+              const _AccountHeading(title: 'إعدادات التطبيق', subtitle: 'خصص تجربة الاستخدام'),
+              const SizedBox(height: 10),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+                  child: Row(children: [
+                    Container(width: 39, height: 39,
+                      decoration: BoxDecoration(color: const Color(0xFF299B91).withValues(alpha: .11), borderRadius: BorderRadius.circular(13)),
+                      child: const Icon(Icons.dark_mode_outlined, color: Color(0xFF299B91))),
+                    const SizedBox(width: 11),
+                    const Expanded(child: Text('مظهر التطبيق', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13))),
+                    DropdownButton<ThemeMode>(
+                      value: appThemeMode.value,
+                      underline: const SizedBox.shrink(),
+                      items: const [
+                        DropdownMenuItem(value: ThemeMode.system, child: Text('تلقائي')),
+                        DropdownMenuItem(value: ThemeMode.light, child: Text('فاتح')),
+                        DropdownMenuItem(value: ThemeMode.dark, child: Text('داكن')),
+                      ],
+                      onChanged: (value) { if (value != null) saveThemeMode(value); },
+                    ),
+                  ]),
+                ),
+              ),
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.info_outline_rounded),
+                  title: const Text('حول التطبيق', style: TextStyle(fontWeight: FontWeight.w700)),
+                  subtitle: const Text('فريق التطوير ومعلومات الإصدار'),
+                  trailing: const Icon(Icons.chevron_left_rounded),
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutScreen())),
+                ),
+              ),
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.feedback_outlined),
+                  title: const Text('اقتراح أو الإبلاغ عن مشكلة', style: TextStyle(fontWeight: FontWeight.w700)),
+                  subtitle: const Text('ساعدنا نطوّر AcadMind'),
+                  trailing: const Icon(Icons.chevron_left_rounded),
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FeedbackScreen())),
+                ),
+              ),
+              const SizedBox(height: 18),
+              SizedBox(width: double.infinity, child: OutlinedButton.icon(
+                onPressed: () => editProfile(p),
+                icon: const Icon(Icons.edit_outlined),
+                label: const Text('تعديل بياناتي'),
+              )),
+              const SizedBox(height: 9),
+              if (!isGuest && email.isNotEmpty && email != 'غير متاح') SizedBox(width: double.infinity, child: OutlinedButton.icon(
+                onPressed: changePassword,
+                icon: const Icon(Icons.lock_reset_rounded),
+                label: const Text('تغيير كلمة المرور'),
+              )),
+              const SizedBox(height: 9),
+              SizedBox(width: double.infinity, child: OutlinedButton.icon(
+                onPressed: () async {
+                  try {
+                    await supabase.auth.signOut();
+                    if (!mounted) return;
+                    // The app may have been opened from a pushed login route.
+                    // Remove that protected route so the signed-out root gate is visible.
+                    Navigator.of(context, rootNavigator: true)
+                        .popUntil((route) => route.isFirst);
+                  } on AuthException catch (error) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تعذر تسجيل الخروج: ${error.message}')));
+                    }
+                  } catch (error) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تعذر تسجيل الخروج: $error')));
+                    }
+                  }
+                },
+                icon: const Icon(Icons.logout_rounded),
+                label: const Text('تسجيل الخروج'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: colors.error,
+                  side: BorderSide(color: colors.error.withValues(alpha: .35)),
+                ),
+              )),
+              const SizedBox(height: 18),
+              Center(child: Text('AcadMind • YOUR SMART ACADEMIC COMPANION',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: colors.onSurfaceVariant.withValues(alpha: .7), fontSize: 9, letterSpacing: .7))),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _AccountHeading extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  const _AccountHeading({required this.title, required this.subtitle});
+  @override
+  Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900)),
+    const SizedBox(height: 3),
+    Text(subtitle, style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+  ]);
+}
+
+class _AccountInfoTile extends StatelessWidget {
+  final IconData icon;
+  final String title, value;
+  const _AccountInfoTile({required this.icon, required this.title, required this.value});
+  @override
+  Widget build(BuildContext context) => ListTile(
+    leading: Icon(icon, color: Theme.of(context).colorScheme.primary),
+    title: Text(title, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+    subtitle: Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+    dense: true,
+  );
+}
+
+class OwnerPage extends StatelessWidget { const OwnerPage({super.key}); @override Widget build(BuildContext context) => const OwnerConsole(); }
+
+class _AsyncList<T> extends StatelessWidget {final Future<List<T>> future;final String empty;final Widget Function(T) builder;const _AsyncList({required this.future,required this.empty,required this.builder});@override Widget build(BuildContext c)=>FutureBuilder<List<T>>(future:future,builder:(c,s){if(s.connectionState==ConnectionState.waiting)return const Center(child:CircularProgressIndicator());if(s.hasError)return _ErrorBox(message:'تعذر تحميل البيانات: ${s.error}');final list=s.data??[];if(list.isEmpty)return _EmptyBox(text:empty);return ListView.separated(padding:const EdgeInsets.all(12),itemCount:list.length,separatorBuilder:(_,__)=>const SizedBox(height:8),itemBuilder:(c,i)=>Card(child:builder(list[i])));});}
+class _EmptyBox extends StatelessWidget {final String text;const _EmptyBox({required this.text});@override Widget build(BuildContext c)=>Center(child:Padding(padding:const EdgeInsets.all(30),child:Text(text,textAlign:TextAlign.center,style:const TextStyle(color:Colors.black54))));}
+class _ErrorBox extends StatelessWidget {final String message;const _ErrorBox({required this.message});@override Widget build(BuildContext c)=>Center(child:Padding(padding:const EdgeInsets.all(20),child:Text(message,textAlign:TextAlign.center,style:TextStyle(color:Theme.of(c).colorScheme.error))));}
+
+
+class _HomeNavItem {
+  final IconData icon;
+  final IconData selectedIcon;
+  final String label;
+  final int index;
+  const _HomeNavItem(this.icon, this.selectedIcon, this.label, this.index);
+}
+).hasMatch(emailValue)) {
+                          ScaffoldMessenger.of(dialogContext).showSnackBar(
+                            const SnackBar(content: Text('اكتب اسمك وبريدًا إلكترونيًا صحيحًا.')),
+                          );
+                          return;
+                        }
+                      } else if (otp.text.trim().length < 6 ||
+                          password.text.length < 8 ||
+                          password.text != confirm.text) {
+                        ScaffoldMessenger.of(dialogContext).showSnackBar(
+                          const SnackBar(content: Text('تأكد من رمز التأكيد، وأن كلمة المرور 8 أحرف على الأقل ومتطابقة.')),
+                        );
+                        return;
+                      }
+
+                      setDialogState(() => busy = true);
+                      try {
+                        if (phase == 0) {
+                          await supabase.auth.updateUser(
+                            UserAttributes(
+                              email: emailInput.text.trim(),
+                              data: {'full_name': name.text.trim()},
+                            ),
+                          );
+                          if (!dialogContext.mounted) return;
+                          setDialogState(() => phase = 1);
+                        } else {
+                          final verification = await supabase.auth.verifyOTP(
+                            type: OtpType.emailChange,
+                            email: emailInput.text.trim(),
+                            token: otp.text.trim(),
+                          );
+                          final verifiedUser = verification.user ?? supabase.auth.currentUser;
+                          if (verifiedUser == null || verifiedUser.id != userId) {
+                            throw Exception('تعذر تأكيد نفس حساب الضيف. لم يتم تغيير الحساب.');
+                          }
+
+                          await supabase.auth.updateUser(
+                            UserAttributes(
+                              password: password.text,
+                              data: {'full_name': name.text.trim()},
+                            ),
+                          );
+
+                          await supabase.from('profiles').update({
+                            'full_name': name.text.trim(),
+                            'email': emailInput.text.trim(),
+                            'updated_at': DateTime.now().toUtc().toIso8601String(),
+                          }).eq('id', userId);
+
+                          if (!dialogContext.mounted) return;
+                          Navigator.pop(dialogContext);
+                          reload();
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('تم تأمين حسابك بنجاح، وبياناتك الدراسية محفوظة كما هي.'),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          }
+                        }
+                      } on AuthException catch (e) {
+                        final detail = e.message.toLowerCase().contains('manual linking')
+                            ? 'فعّل Manual Linking من إعدادات Authentication في Supabase، ثم حاول مرة أخرى.'
+                            : e.message;
+                        if (dialogContext.mounted) {
+                          ScaffoldMessenger.of(dialogContext).showSnackBar(
+                            SnackBar(content: Text('تعذر إكمال العملية: $detail')),
+                          );
+                        }
+                      } catch (e) {
+                        if (dialogContext.mounted) {
+                          ScaffoldMessenger.of(dialogContext).showSnackBar(
+                            SnackBar(content: Text('تعذر إكمال العملية: $e')),
+                          );
+                        }
+                      } finally {
+                        if (dialogContext.mounted) setDialogState(() => busy = false);
+                      }
+                    },
+              child: busy
+                  ? const SizedBox(width: 19, height: 19, child: CircularProgressIndicator(strokeWidth: 2))
+                  : Text(phase == 0 ? 'إرسال رمز التأكيد' : 'تأكيد وإنشاء الحساب'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    name.dispose();
+    emailInput.dispose();
+    otp.dispose();
+    password.dispose();
+    confirm.dispose();
   }
 
   Future<void> changePassword() async {
