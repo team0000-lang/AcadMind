@@ -1,5 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'backend.dart';
+
+final ValueNotifier<int> profileScopeRevision = ValueNotifier<int>(0);
 
 class AcadMindData {
   static Future<Map<String, dynamic>> profile() async {
