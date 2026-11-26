@@ -1,7 +1,7 @@
 
 import 'package:flutter/material.dart';
 import '../services.dart';
-import 'home_screen.dart';
+import 'home_screen.dart' show HomeScreen;
 import 'student_setup_screen.dart';
 
 class PostLoginGate extends StatefulWidget {
