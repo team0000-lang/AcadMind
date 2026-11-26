@@ -9,13 +9,13 @@ class OwnerConsole extends StatefulWidget {
 }
 
 class _OwnerConsoleState extends State<OwnerConsole> with SingleTickerProviderStateMixin {
-  late final TabController tabs = TabController(length: 6, vsync: this);
+  late final TabController tabs = TabController(length: 7, vsync: this);
   Future<void> refresh() async { if(mounted) setState(() {}); }
   @override void dispose(){tabs.dispose();super.dispose();}
   @override Widget build(BuildContext context) => Column(children:[
     Padding(padding:const EdgeInsets.fromLTRB(16,12,16,4),child:Row(children:[const Expanded(child:Text('مركز إدارة AcadMind',style:TextStyle(fontSize:22,fontWeight:FontWeight.w900))),IconButton(onPressed:refresh,icon:const Icon(Icons.refresh))])),
-    TabBar(controller:tabs,isScrollable:true,tabs:const [Tab(icon:Icon(Icons.people_alt_outlined),text:'الطلاب'),Tab(icon:Icon(Icons.menu_book_outlined),text:'المواد'),Tab(icon:Icon(Icons.calendar_month_outlined),text:'الجدول'),Tab(icon:Icon(Icons.upload_file_outlined),text:'مكتبة AI'),Tab(icon:Icon(Icons.campaign_outlined),text:'الإعلانات'),Tab(icon:Icon(Icons.system_update_alt),text:'التحديثات')]),
-    Expanded(child:TabBarView(controller:tabs,children:[StudentsAdmin(onChanged:refresh),SubjectsAdmin(onChanged:refresh),SchedulesAdmin(onChanged:refresh),KnowledgeAdmin(onChanged:refresh),AnnouncementsAdmin(onChanged:refresh),ReleaseAdmin(onChanged:refresh)])),
+    TabBar(controller:tabs,isScrollable:true,tabs:const [Tab(icon:Icon(Icons.people_alt_outlined),text:'الطلاب'),Tab(icon:Icon(Icons.menu_book_outlined),text:'المواد'),Tab(icon:Icon(Icons.calendar_month_outlined),text:'الجدول'),Tab(icon:Icon(Icons.upload_file_outlined),text:'مكتبة AI'),Tab(icon:Icon(Icons.campaign_outlined),text:'الإعلانات'),Tab(icon:Icon(Icons.system_update_alt),text:'التحديثات'),Tab(icon:Icon(Icons.feedback_outlined),text:'الاقتراحات')]),
+    Expanded(child:TabBarView(controller:tabs,children:[StudentsAdmin(onChanged:refresh),SubjectsAdmin(onChanged:refresh),SchedulesAdmin(onChanged:refresh),KnowledgeAdmin(onChanged:refresh),AnnouncementsAdmin(onChanged:refresh),ReleaseAdmin(onChanged:refresh),FeedbackAdmin(onChanged:refresh)])),
   ]);
 }
 
@@ -58,13 +58,91 @@ Future<void> _addYoutube(Map s)=>_simpleForm('إضافة فيديو', [('عنو�
 Future<void> _addDrive(Map s)async{await _simpleForm('إضافة مجلد Drive', [('اسم المجلد','text'),('رابط Google Drive','url'),('الوصف','text')],(v)async{final u=Uri.tryParse(v[1]);if(u==null||u.scheme!='https'||u.host!='drive.google.com')throw Exception('الرابط يجب أن يكون Google Drive');await supabase.from('drive_folders').insert({'subject_id':s['id'],'academic_year_id':s['academic_year_id'],'folder_name':v[0],'folder_url':v[1],'description':v[2],'is_active':true});});}
 @override Widget build(BuildContext c)=>FutureBuilder<List<Map<String,dynamic>>>(future:future,builder:(c,s){if(!s.hasData)return s.hasError?Center(child:Text('${s.error}')):const Center(child:CircularProgressIndicator());return RefreshIndicator(onRefresh:()async=>reload(),child:ListView(padding:const EdgeInsets.all(12),children:[FilledButton.icon(onPressed:addSubject,icon:const Icon(Icons.add),label:const Text('إضافة مادة جديدة')),...s.data!.map((x)=>Card(child:ListTile(leading:const Icon(Icons.menu_book),title:Text('${x['name_ar']}'),subtitle:Text('${x['code']??''} • ${x['is_active']?'مفعلة':'مخفية'}'),trailing:IconButton(icon:const Icon(Icons.more_vert),onPressed:()=>subjectActions(x)))))]));});}
 
-class SchedulesAdmin extends StatefulWidget{final VoidCallback onChanged;const SchedulesAdmin({super.key,required this.onChanged});@override State<SchedulesAdmin> createState()=>_SchedulesAdminState();}
-class _SchedulesAdminState extends State<SchedulesAdmin>{late Future<List<Map<String,dynamic>>> future;@override void initState(){super.initState();future=load();}Future<List<Map<String,dynamic>>> load()=>supabase.from('schedules').select('id,day_of_week,starts_at,ends_at,class_type,location,is_active,academic_year_id,subjects(name_ar)').eq('is_active',true).isFilter('deleted_at',null).order('day_of_week').then((v)=>List<Map<String,dynamic>>.from(v));void reload(){setState(()=>future=load());widget.onChanged();}
-
-@override Widget build(BuildContext c)=>FutureBuilder<List<Map<String,dynamic>>>(future:future,builder:(c,s){if(!s.hasData)return s.hasError?Center(child:Text('${s.error}')):const Center(child:CircularProgressIndicator());return ListView(padding:const EdgeInsets.all(12),children:[FilledButton.icon(onPressed:()=>_createSchedule(context,reload),icon:const Icon(Icons.add),label:const Text('إضافة موعد للجدول')),...s.data!.map((x)=>Card(child:ListTile(leading:CircleAvatar(child:Text('${(x['day_of_week'] as int)+1}')),title:Text('${(x['subjects'] is Map)?x['subjects']['name_ar']:'محاضرة'}'),subtitle:Text('${_day(x['day_of_week'] as int)} • ${x['starts_at']} - ${x['ends_at']} • ${x['location']??''}'),trailing:IconButton(icon:const Icon(Icons.delete_outline),onPressed:()async{await supabase.from('schedules').update({'is_active':false}).eq('id',x['id']);reload();}))))]);});
+class SchedulesAdmin extends StatefulWidget {
+  final VoidCallback onChanged;
+  const SchedulesAdmin({super.key,required this.onChanged});
+  @override State<SchedulesAdmin> createState()=>_SchedulesAdminState();
+}
+class _SchedulesAdminState extends State<SchedulesAdmin> {
+  late Future<List<Map<String,dynamic>>> future;
+  @override void initState(){super.initState();future=load();}
+  Future<List<Map<String,dynamic>>> load()=>supabase.from('schedules')
+    .select('id,day_of_week,starts_at,ends_at,class_type,location,instructor,is_active,academic_year_id,group_id,section_id,subjects(name_ar),groups(name),sections(name)')
+    .isFilter('deleted_at',null).order('day_of_week').order('starts_at')
+    .then((v)=>List<Map<String,dynamic>>.from(v));
+  void reload(){if(mounted)setState(()=>future=load());widget.onChanged();}
+  @override Widget build(BuildContext c)=>FutureBuilder<List<Map<String,dynamic>>>(future:future,builder:(c,s){
+    if(!s.hasData)return s.hasError?Center(child:Text('تعذر تحميل الجدول: ${s.error}')):const Center(child:CircularProgressIndicator());
+    final rows=s.data!;
+    return ListView(padding:const EdgeInsets.all(12),children:[
+      FilledButton.icon(onPressed:()=>_scheduleForm(context,reload),icon:const Icon(Icons.add),label:const Text('إضافة موعد للجدول')),
+      const SizedBox(height:10),
+      if(rows.isEmpty)const Text('لا توجد مواعيد مضافة.'),
+      ...rows.map((x)=>Card(child:ListTile(
+        leading:CircleAvatar(child:Text('${(x['day_of_week'] as int)+1}')),
+        title:Text('${(x['subjects'] is Map)?x['subjects']['name_ar']:'موعد'}'),
+        subtitle:Text('${_day(x['day_of_week'] as int)} • ${x['starts_at']} - ${x['ends_at']}\n${x['location']??'بدون قاعة'} • ${x['instructor']??'لم يحدد المحاضر'}\n${(x['groups'] is Map)?x['groups']['name']??'': 'عام'} ${(x['sections'] is Map)?x['sections']['name']??'':''}'),
+        isThreeLine:true,
+        trailing:PopupMenuButton<String>(onSelected:(v)async{
+          if(v=='edit')await _scheduleForm(context,reload,row:x);
+          if(v=='hide'){await supabase.from('schedules').update({'is_active':false}).eq('id',x['id']);reload();}
+        },itemBuilder:(_)=>const [PopupMenuItem(value:'edit',child:Text('تعديل الموعد')),PopupMenuItem(value:'hide',child:Text('إخفاء الموعد'))]),
+      ))),
+    ]);
+  });
 }
 String _day(int d)=>['الأحد','الإثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'][d.clamp(0,6)];
-Future<void> _createSchedule(BuildContext context,VoidCallback done)async{final ys=List<Map<String,dynamic>>.from(await supabase.from('academic_years').select('id,name_ar').order('display_order'));final subs=List<Map<String,dynamic>>.from(await supabase.from('subjects').select('id,name_ar,academic_year_id').eq('is_active',true).isFilter('deleted_at',null).order('name_ar'));if(ys.isEmpty)return;String? year='${ys.first['id']}';final available=subs.where((e)=>e['academic_year_id']==year).toList();String? subject=available.isEmpty?null:'${available.first['id']}';int day=0;String type='lecture';final start=TextEditingController(text:'09:00'),end=TextEditingController(text:'10:00'),place=TextEditingController();if(!context.mounted)return;await showDialog(context:context,builder:(ctx)=>StatefulBuilder(builder:(ctx,setD)=>AlertDialog(title:const Text('إضافة موعد'),content:SizedBox(width:420,child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[DropdownButtonFormField<String>(value:year,decoration:const InputDecoration(labelText:'السنة'),items:ys.map((e)=>DropdownMenuItem(value:'${e['id']}',child:Text('${e['name_ar']}'))).toList(),onChanged:(v)=>setD((){year=v;final matching=subs.where((e)=>e['academic_year_id']==v).toList();subject=matching.isEmpty?null:'${matching.first['id']}';})),DropdownButtonFormField<String>(value:subject,decoration:const InputDecoration(labelText:'المادة'),items:subs.where((e)=>e['academic_year_id']==year).map((e)=>DropdownMenuItem(value:'${e['id']}',child:Text('${e['name_ar']}'))).toList(),onChanged:(v)=>setD(()=>subject=v)),DropdownButtonFormField<int>(value:day,decoration:const InputDecoration(labelText:'اليوم'),items:List.generate(7,(i)=>DropdownMenuItem(value:i,child:Text(_day(i)))),onChanged:(v)=>setD(()=>day=v??0)),DropdownButtonFormField<String>(value:type,decoration:const InputDecoration(labelText:'نوع المحاضرة'),items:const [DropdownMenuItem(value:'lecture',child:Text('محاضرة')),DropdownMenuItem(value:'section',child:Text('سكشن')),DropdownMenuItem(value:'practical',child:Text('عملي')),DropdownMenuItem(value:'lab',child:Text('معمل'))],onChanged:(v)=>setD(()=>type=v??'lecture')),TextField(controller:start,decoration:const InputDecoration(labelText:'وقت البداية HH:MM')),TextField(controller:end,decoration:const InputDecoration(labelText:'وقت النهاية HH:MM')),TextField(controller:place,decoration:const InputDecoration(labelText:'المكان / القاعة'))]))),actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إلغاء')),FilledButton(onPressed:()async{try{if(subject==null)throw Exception('أضف مادة أولاً');await supabase.from('schedules').insert({'academic_year_id':year,'subject_id':subject,'day_of_week':day,'class_type':type,'starts_at':start.text.trim(),'ends_at':end.text.trim(),'location':place.text.trim(),'is_active':true});if(ctx.mounted)Navigator.pop(ctx);done();}catch(e){if(ctx.mounted)ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content:Text('$e')));}},child:const Text('إضافة'))])));start.dispose();end.dispose();place.dispose();}
+
+Future<void> _scheduleForm(BuildContext context,VoidCallback done,{Map<String,dynamic>? row}) async {
+  final years=List<Map<String,dynamic>>.from(await supabase.from('academic_years').select('id,name_ar').order('display_order'));
+  final subjects=List<Map<String,dynamic>>.from(await supabase.from('subjects').select('id,name_ar,academic_year_id').eq('is_active',true).isFilter('deleted_at',null).order('name_ar'));
+  if(years.isEmpty||!context.mounted)return;
+  String year='${row?['academic_year_id']??years.first['id']}';
+  String? subject=row?['subject_id']?.toString();
+  if(subject==null && row?['subjects'] is Map) subject=subjects.where((e)=>e['name_ar']==row!['subjects']['name_ar']).map((e)=>'${e['id']}').firstOrNull;
+  final subjectOptions=subjects.where((e)=>e['academic_year_id']==year).toList();
+  subject??=subjectOptions.isEmpty?null:'${subjectOptions.first['id']}';
+  final groups=List<Map<String,dynamic>>.from(await supabase.from('groups').select('id,name,academic_year_id').eq('academic_year_id',year).eq('is_active',true).order('display_order'));
+  String? group=row?['group_id']?.toString();
+  final sections=group==null? <Map<String,dynamic>>[] : List<Map<String,dynamic>>.from(await supabase.from('sections').select('id,name,group_id').eq('group_id',group).eq('is_active',true).order('display_order'));
+  String? section=row?['section_id']?.toString();
+  int day=(row?['day_of_week'] as int?)??0;
+  String type='${row?['class_type']??'lecture'}';
+  final start=TextEditingController(text:row?['starts_at']?.toString().substring(0,5)??'09:00');
+  final end=TextEditingController(text:row?['ends_at']?.toString().substring(0,5)??'10:00');
+  final place=TextEditingController(text:'${row?['location']??''}');
+  final teacher=TextEditingController(text:'${row?['instructor']??''}');
+  if(!context.mounted)return;
+  await showDialog(context:context,builder:(ctx)=>StatefulBuilder(builder:(ctx,setD)=>AlertDialog(
+    title:Text(row==null?'إضافة موعد':'تعديل الموعد'),
+    content:SizedBox(width:480,child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
+      DropdownButtonFormField<String>(value:year,decoration:const InputDecoration(labelText:'السنة الدراسية'),items:years.map((e)=>DropdownMenuItem(value:'${e['id']}',child:Text('${e['name_ar']}'))).toList(),onChanged:(v)async{if(v==null)return;setD(()=>year=v);final g=await supabase.from('groups').select('id,name,academic_year_id').eq('academic_year_id',v).eq('is_active',true).order('display_order');if(!ctx.mounted)return;setD((){group=null;section=null;});}),
+      DropdownButtonFormField<String>(value:subject,decoration:const InputDecoration(labelText:'المادة'),items:subjects.where((e)=>e['academic_year_id']==year).map((e)=>DropdownMenuItem(value:'${e['id']}',child:Text('${e['name_ar']}'))).toList(),onChanged:(v)=>setD(()=>subject=v)),
+      DropdownButtonFormField<int>(value:day,decoration:const InputDecoration(labelText:'اليوم'),items:List.generate(7,(i)=>DropdownMenuItem(value:i,child:Text(_day(i)))),onChanged:(v)=>setD(()=>day=v??0)),
+      DropdownButtonFormField<String>(value:type,decoration:const InputDecoration(labelText:'نوع الحصة'),items:const [DropdownMenuItem(value:'lecture',child:Text('محاضرة')),DropdownMenuItem(value:'section',child:Text('سكشن')),DropdownMenuItem(value:'practical',child:Text('عملي')),DropdownMenuItem(value:'lab',child:Text('معمل'))],onChanged:(v)=>setD(()=>type=v??'lecture')),
+      DropdownButtonFormField<String>(value:group,decoration:const InputDecoration(labelText:'المجموعة (اختياري)'),items:groups.map((e)=>DropdownMenuItem(value:'${e['id']}',child:Text('${e['name']}'))).toList(),onChanged:(v)async{setD((){group=v;section=null;});}),
+      DropdownButtonFormField<String>(value:section,decoration:const InputDecoration(labelText:'السكشن (اختياري)'),items:sections.where((e)=>e['group_id']==group).map((e)=>DropdownMenuItem(value:'${e['id']}',child:Text('${e['name']}'))).toList(),onChanged:(v)=>setD(()=>section=v)),
+      TextField(controller:teacher,decoration:const InputDecoration(labelText:'اسم المحاضر / المعيد')),
+      TextField(controller:start,decoration:const InputDecoration(labelText:'وقت البداية HH:MM')),
+      TextField(controller:end,decoration:const InputDecoration(labelText:'وقت النهاية HH:MM')),
+      TextField(controller:place,decoration:const InputDecoration(labelText:'المكان / القاعة')),
+    ]))),
+    actions:[
+      TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إلغاء')),
+      FilledButton(onPressed:()async{
+        try{
+          final time=RegExp(r'^([01]\\d|2[0-3]):[0-5]\\d$');
+          if(subject==null)throw Exception('اختر المادة');
+          if(!time.hasMatch(start.text.trim())||!time.hasMatch(end.text.trim())||start.text.trim()>=end.text.trim())throw Exception('تأكد من صحة وقت البداية والنهاية');
+          final payload={'academic_year_id':year,'subject_id':subject,'day_of_week':day,'class_type':type,'starts_at':start.text.trim(),'ends_at':end.text.trim(),'location':place.text.trim(),'instructor':teacher.text.trim(),'group_id':group,'section_id':section,'is_active':true};
+          if(row==null){await supabase.from('schedules').insert(payload);}else{await supabase.from('schedules').update(payload).eq('id',row['id']);}
+          if(ctx.mounted)Navigator.pop(ctx);done();
+        }catch(e){if(ctx.mounted)ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content:Text('تعذر الحفظ: $e')));}
+      },child:Text(row==null?'إضافة':'حفظ التعديلات')),
+    ],
+  )));
+  start.dispose();end.dispose();place.dispose();teacher.dispose();
+}
 
 class KnowledgeAdmin extends StatefulWidget{final VoidCallback onChanged;const KnowledgeAdmin({super.key,required this.onChanged});@override State<KnowledgeAdmin> createState()=>_KnowledgeAdminState();}
 class _KnowledgeAdminState extends State<KnowledgeAdmin>{late Future<List<Map<String,dynamic>>> future;bool busy=false;@override void initState(){super.initState();future=load();}Future<List<Map<String,dynamic>>> load()=>supabase.from('knowledge_documents').select('id,document_name,status,mime_type,created_at,subjects(name_ar)').isFilter('deleted_at',null).order('created_at',ascending:false).then((v)=>List<Map<String,dynamic>>.from(v));void reload(){setState(()=>future=load());widget.onChanged();}
@@ -77,3 +155,48 @@ class _AnnouncementsAdminState extends State<AnnouncementsAdmin>{final title=Tex
 
 class ReleaseAdmin extends StatefulWidget{final VoidCallback onChanged;const ReleaseAdmin({super.key,required this.onChanged});@override State<ReleaseAdmin> createState()=>_ReleaseAdminState();}
 class _ReleaseAdminState extends State<ReleaseAdmin>{final version=TextEditingController(),buildNumber=TextEditingController(),url=TextEditingController(),notes=TextEditingController();bool force=false,busy=false;@override void dispose(){version.dispose();buildNumber.dispose();url.dispose();notes.dispose();super.dispose();}Future<void> publish()async{final n=int.tryParse(buildNumber.text.trim()),u=Uri.tryParse(url.text.trim());if(version.text.trim().isEmpty||n==null||u==null||u.scheme!='https'){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('أدخل إصداراً ورقم بناء ورابط HTTPS صحيحاً')));return;}setState(()=>busy=true);try{await supabase.from('app_versions').insert({'platform':'android','version_name':version.text.trim(),'build_number':n,'update_url':u.toString(),'release_notes':notes.text.trim(),'minimum_supported_version':version.text.trim(),'force_update':force,'optional_update':!force,'enabled':true,'released_at':DateTime.now().toUtc().toIso8601String()});await supabase.from('update_settings').upsert({'platform':'android','minimum_supported_version':version.text.trim(),'force_update':force,'update_url':u.toString(),'message':notes.text.trim(),'enabled':true},onConflict:'platform');version.clear();buildNumber.clear();url.clear();notes.clear();if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('تم نشر التحديث')));widget.onChanged();}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('فشل نشر التحديث: $e')));}finally{if(mounted)setState(()=>busy=false);}}@override Widget build(BuildContext c)=>ListView(padding:const EdgeInsets.all(16),children:[const Text('نشر إصدار Android جديد',style:TextStyle(fontSize:18,fontWeight:FontWeight.bold)),TextField(controller:version,decoration:const InputDecoration(labelText:'رقم الإصدار مثل 1.0.2')),TextField(controller:buildNumber,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'رقم البناء')),TextField(controller:url,keyboardType:TextInputType.url,decoration:const InputDecoration(labelText:'رابط APK (HTTPS)')),TextField(controller:notes,minLines:2,maxLines:4,decoration:const InputDecoration(labelText:'ملاحظات التحديث')),SwitchListTile(value:force,onChanged:(v)=>setState(()=>force=v),title:const Text('تحديث إجباري')),FilledButton(onPressed:busy?null:publish,child:const Text('نشر التحديث'))]);}
+
+class FeedbackAdmin extends StatefulWidget {
+  final VoidCallback onChanged;
+  const FeedbackAdmin({super.key,required this.onChanged});
+  @override State<FeedbackAdmin> createState()=>_FeedbackAdminState();
+}
+class _FeedbackAdminState extends State<FeedbackAdmin> {
+  late Future<List<Map<String,dynamic>>> future;
+  @override void initState(){super.initState();future=load();}
+  Future<List<Map<String,dynamic>>> load()=>supabase.from('feedback').select('id,user_id,category,subject,message,status,admin_reply,created_at,profiles(full_name,email)').order('created_at',ascending:false).then((v)=>List<Map<String,dynamic>>.from(v));
+  void reload(){setState(()=>future=load());widget.onChanged();}
+  String category(String v)=>switch(v){'suggestion'=>'اقتراح','bug'=>'مشكلة تقنية','content'=>'محتوى دراسي',_=>'أخرى'};
+  String status(String v)=>switch(v){'new'=>'جديدة','in_progress'=>'قيد المتابعة','resolved'=>'تم الحل',_=>'مغلقة'};
+  Future<void> edit(Map<String,dynamic> item)async{
+    String value='${item['status']}';
+    final reply=TextEditingController(text:'${item['admin_reply']??''}');
+    await showDialog(context:context,builder:(ctx)=>StatefulBuilder(builder:(ctx,setD)=>AlertDialog(
+      title:Text('${item['subject']}'),
+      content:SizedBox(width:450,child:SingleChildScrollView(child:Column(crossAxisAlignment:CrossAxisAlignment.start,mainAxisSize:MainAxisSize.min,children:[
+        Text('${item['message']}'),
+        const SizedBox(height:12),
+        DropdownButtonFormField<String>(value:value,decoration:const InputDecoration(labelText:'حالة الطلب'),items:const [DropdownMenuItem(value:'new',child:Text('جديدة')),DropdownMenuItem(value:'in_progress',child:Text('قيد المتابعة')),DropdownMenuItem(value:'resolved',child:Text('تم الحل')),DropdownMenuItem(value:'closed',child:Text('مغلقة'))],onChanged:(v)=>setD(()=>value=v??value)),
+        const SizedBox(height:10),TextField(controller:reply,minLines:2,maxLines:5,decoration:const InputDecoration(labelText:'رد الإدارة (اختياري)')),
+      ]))),
+      actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إلغاء')),FilledButton(onPressed:()async{try{await supabase.from('feedback').update({'status':value,'admin_reply':reply.text.trim().isEmpty?null:reply.text.trim(),'updated_at':DateTime.now().toUtc().toIso8601String()}).eq('id',item['id']);if(ctx.mounted)Navigator.pop(ctx);reload();}catch(e){if(ctx.mounted)ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content:Text('$e')));}},child:const Text('حفظ'))],
+    )));
+    reply.dispose();
+  }
+  @override Widget build(BuildContext c)=>FutureBuilder<List<Map<String,dynamic>>>(future:future,builder:(c,s){
+    if(!s.hasData)return s.hasError?Center(child:Text('تعذر تحميل الرسائل: ${s.error}')):const Center(child:CircularProgressIndicator());
+    final rows=s.data!;
+    return RefreshIndicator(onRefresh:()async=>reload(),child:ListView(padding:const EdgeInsets.all(12),children:[
+      Text('إجمالي الرسائل: ${rows.length}',style:const TextStyle(fontWeight:FontWeight.w800)),
+      if(rows.isEmpty)const Padding(padding:EdgeInsets.all(25),child:Text('لا توجد اقتراحات أو بلاغات بعد.',textAlign:TextAlign.center)),
+      ...rows.map((x)=>Card(child:ListTile(
+        leading:const CircleAvatar(child:Icon(Icons.feedback_outlined)),
+        title:Text('${x['subject']}'),
+        subtitle:Text('${category('${x['category']}')} • ${status('${x['status']}')}\n${(x['profiles'] is Map)?x['profiles']['email']??'طالب':''}'),
+        isThreeLine:true,
+        trailing:IconButton(icon:const Icon(Icons.open_in_new),onPressed:()=>edit(x)),
+      ))),
+    ]));
+  });
+}
+
