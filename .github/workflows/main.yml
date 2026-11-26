@@ -83,8 +83,13 @@ jobs:
           if manifest.exists():
               t = manifest.read_text().replace('android:label="acadmind"', 'android:label="AcadMind"')
               t = t.replace('android:icon="@mipmap/ic_launcher"', 'android:icon="@drawable/acadmind_icon"')
-              if 'POST_NOTIFICATIONS' not in t:
-                  t = t.replace('<application', '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n    <application', 1)
+              permissions = []
+              if 'android.permission.INTERNET' not in t:
+                  permissions.append('    <uses-permission android:name="android.permission.INTERNET" />')
+              if 'android.permission.POST_NOTIFICATIONS' not in t:
+                  permissions.append('    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />')
+              if permissions:
+                  t = t.replace('<application', '\\n'.join(permissions) + '\\n    <application', 1)
               manifest.write_text(t)
 
           drawable = root / 'src/main/res/drawable'
