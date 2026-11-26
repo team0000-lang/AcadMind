@@ -432,7 +432,7 @@ class _TodayScheduleSectionState extends State<_TodayScheduleSection> {
             ...lessons.map((lesson) {
               final subjectData = lesson['subjects'];
               final subjectName = subjectData is Map
-                  ? (subjectData['name_ar'] ?? subjectData['name_en'] ?? 'محاضرة').toString()
+                  ? (subjectData['name_en'] ?? 'Lecture').toString()
                   : 'محاضرة';
               final groupData = lesson['groups'];
               final sectionData = lesson['sections'];
@@ -567,7 +567,7 @@ class SubjectsPage extends StatelessWidget {
       return ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal:16,vertical:7),
         leading: Container(width:48,height:48,decoration:BoxDecoration(color:tint.withValues(alpha:.13),borderRadius:BorderRadius.circular(16)),child:Icon(subjectIcon(item['icon_path']?.toString()),color:tint,size:25)),
-        title:Text((item['name_ar']??item['name_en']??'مادة') as String,style:const TextStyle(fontWeight:FontWeight.w800)),
+        title:Text((item['name_en']??'Subject') as String,style:const TextStyle(fontWeight:FontWeight.w800)),
         subtitle:Text((item['description']??item['code']??'') as String,maxLines:2,overflow:TextOverflow.ellipsis),
         trailing:const Icon(Icons.chevron_left),
         onTap:()=>Navigator.push(c,MaterialPageRoute(builder:(_)=>SubjectDetailPage(subject:item))),
@@ -608,7 +608,7 @@ class SubjectDetailPage extends StatelessWidget {
   }
 
   @override Widget build(BuildContext c) => Scaffold(
-    appBar: AppBar(title: Text((subject['name_ar'] ?? 'المادة') as String)),
+    appBar: AppBar(title: Text((subject['name_en'] ?? 'Subject') as String)),
     body: FutureBuilder<Map<String, List<Map<String, dynamic>>>>(
       future: loadContent(),
       builder: (c, s) {
@@ -892,7 +892,7 @@ class _ScheduleLessonCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final subject = item['subjects'] is Map
-        ? (item['subjects']['name_ar'] ?? item['subjects']['name_en'] ?? 'محاضرة').toString()
+        ? (item['subjects']['name_en'] ?? 'Lecture').toString()
         : 'محاضرة';
     final location = (item['location'] ?? 'المكان غير محدد').toString();
     final instructor = (item['instructor'] ?? 'المحاضر غير محدد').toString();
@@ -981,7 +981,7 @@ class _AiPageState extends State<AiPage> {
   @override
   void initState() {
     super.initState();
-    subjectFuture = supabase.from('subjects').select('id,name_ar').eq('is_active', true).isFilter('deleted_at', null).order('name_ar').then((v) => List<Map<String, dynamic>>.from(v));
+    subjectFuture = supabase.from('subjects').select('id,name_en').eq('is_active', true).isFilter('deleted_at', null).order('name_en').then((v) => List<Map<String, dynamic>>.from(v));
   }
 
   @override
@@ -1127,7 +1127,7 @@ class _AiPageState extends State<AiPage> {
               ),
               items: [
                 const DropdownMenuItem<String>(value: null, child: Text('سؤال عام — كل المواد')),
-                ...(snapshot.data ?? []).map((item) => DropdownMenuItem<String>(value: '${item['id']}', child: Text('${item['name_ar']}'))),
+                ...(snapshot.data ?? []).map((item) => DropdownMenuItem<String>(value: '${item['id']}', child: Text('${item['name_en']}'))),
               ],
               onChanged: busy ? null : (value) {
                 setState(() {
