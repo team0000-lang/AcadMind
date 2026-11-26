@@ -436,6 +436,7 @@ class SubjectDetailPage extends StatelessWidget {
 }
 
 
+
 class SchedulePage extends StatefulWidget {
   const SchedulePage({super.key});
   @override
@@ -445,6 +446,7 @@ class SchedulePage extends StatefulWidget {
 class _SchedulePageState extends State<SchedulePage> {
   static const days = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
   late Future<List<Map<String, dynamic>>> future;
+  int selectedDay = -1;
 
   @override
   void initState() {
@@ -459,8 +461,12 @@ class _SchedulePageState extends State<SchedulePage> {
     return rows;
   }
 
+  void reload() {
+    setState(() => future = loadSchedule());
+  }
+
   void scopeChanged() {
-    if (mounted) setState(() => future = loadSchedule());
+    if (mounted) reload();
   }
 
   @override
@@ -469,44 +475,236 @@ class _SchedulePageState extends State<SchedulePage> {
     super.dispose();
   }
 
+  String clock(Object? value) {
+    final raw = (value ?? '').toString();
+    return raw.length >= 5 ? raw.substring(0, 5) : raw;
+  }
+
   @override
-  Widget build(BuildContext context) => _AsyncList<Map<String, dynamic>>(
-    future: future,
-    empty: 'مفيش مواعيد مسجلة للمجموعة والسكشن بتوعك حالياً.',
-    builder: (item) {
-      final day = (item['day_of_week'] as int).clamp(0, 6);
-      final subject = item['subjects'] is Map
-          ? (item['subjects']['name_ar'] ?? item['subjects']['name_en'] ?? 'محاضرة').toString()
-          : 'محاضرة';
-      final time = item['starts_at'].toString().substring(0, 5) + ' - ' +
-          item['ends_at'].toString().substring(0, 5);
-      final location = (item['location'] ?? 'لم يحدد المكان').toString();
-      final instructor = (item['instructor'] ?? 'لم يحدد المحاضر').toString();
-      return ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: Container(
-          width: 45, height: 45, alignment: Alignment.center,
-          decoration: BoxDecoration(color: const Color(0xFF5145D6).withValues(alpha: .10),
-            borderRadius: BorderRadius.circular(14)),
-          child: Text((day + 1).toString(),
-            style: const TextStyle(color: Color(0xFF5145D6), fontWeight: FontWeight.w900, fontSize: 16)),
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.cloud_off_rounded, size: 42),
+              const SizedBox(height: 12),
+              const Text('تعذر تحميل الجدول'),
+              const SizedBox(height: 10),
+              FilledButton.icon(onPressed: reload, icon: const Icon(Icons.refresh_rounded), label: const Text('إعادة المحاولة')),
+            ]),
+          ));
+        }
+
+        final rows = snapshot.data ?? <Map<String, dynamic>>[];
+        final filtered = selectedDay == -1
+            ? rows
+            : rows.where((row) => row['day_of_week'] == selectedDay).toList();
+        final groupedDays = selectedDay == -1
+            ? days.asMap().entries.where((entry) => rows.any((row) => row['day_of_week'] == entry.key)).toList()
+            : [MapEntry(selectedDay, days[selectedDay])];
+
+        return Column(children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 15, 18, 10),
+            child: Row(children: [
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('جدولي الدراسي', style: TextStyle(fontSize: 23, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 4),
+                Text('تابع محاضراتك وسكاشنك خلال الأسبوع',
+                  style: TextStyle(color: colors.onSurfaceVariant, fontSize: 11)),
+              ])),
+              IconButton.filledTonal(
+                onPressed: reload,
+                tooltip: 'تحديث الجدول',
+                icon: const Icon(Icons.refresh_rounded),
+              ),
+            ]),
+          ),
+          SizedBox(
+            height: 48,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              children: [
+                Padding(
+                  padding: const EdgeInsetsDirectional.only(end: 7),
+                  child: ChoiceChip(
+                    label: const Text('الأسبوع'),
+                    selected: selectedDay == -1,
+                    onSelected: (_) => setState(() => selectedDay = -1),
+                    selectedColor: colors.primaryContainer,
+                    labelStyle: TextStyle(fontWeight: FontWeight.w800, color: selectedDay == -1 ? colors.onPrimaryContainer : colors.onSurfaceVariant),
+                    showCheckmark: false,
+                  ),
+                ),
+                ...days.asMap().entries.map((entry) => Padding(
+                  padding: const EdgeInsetsDirectional.only(end: 7),
+                  child: ChoiceChip(
+                    label: Text(entry.value),
+                    selected: selectedDay == entry.key,
+                    onSelected: (_) => setState(() => selectedDay = entry.key),
+                    selectedColor: colors.primaryContainer,
+                    labelStyle: TextStyle(fontWeight: FontWeight.w700, color: selectedDay == entry.key ? colors.onPrimaryContainer : colors.onSurfaceVariant),
+                    showCheckmark: false,
+                  ),
+                )),
+              ],
+            ),
+          ),
+          const SizedBox(height: 9),
+          Expanded(
+            child: rows.isEmpty
+                ? ListView(padding: const EdgeInsets.fromLTRB(18, 20, 18, 30), children: [
+                    Container(
+                      padding: const EdgeInsets.all(23),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).cardColor,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: colors.outlineVariant.withValues(alpha: .6)),
+                      ),
+                      child: Column(children: [
+                        Container(width: 72, height: 72,
+                          decoration: BoxDecoration(color: colors.primary.withValues(alpha: .10), borderRadius: BorderRadius.circular(22)),
+                          child: Icon(Icons.calendar_month_rounded, color: colors.primary, size: 35)),
+                        const SizedBox(height: 16),
+                        const Text('جدولك لسه ما اتضافش',
+                          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 17)),
+                        const SizedBox(height: 8),
+                        Text('اختيارك للمجموعة والسكشن اتحفظ. أول ما الإدارة تضيف المواعيد هتظهر هنا تلقائيًا.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12, height: 1.7)),
+                        const SizedBox(height: 14),
+                        OutlinedButton.icon(onPressed: reload,
+                          icon: const Icon(Icons.refresh_rounded),
+                          label: const Text('تحديث الجدول')),
+                      ]),
+                    ),
+                  ])
+                : filtered.isEmpty
+                    ? Center(child: Padding(
+                        padding: const EdgeInsets.all(26),
+                        child: Column(mainAxisSize: MainAxisSize.min, children: [
+                          Icon(Icons.event_available_rounded, size: 40, color: colors.onSurfaceVariant),
+                          const SizedBox(height: 10),
+                          Text('مفيش محاضرات يوم ' + days[selectedDay],
+                            style: const TextStyle(fontWeight: FontWeight.w800)),
+                        ]),
+                      ))
+                    : ListView(
+                        padding: const EdgeInsets.fromLTRB(16, 9, 16, 28),
+                        children: [
+                          ...groupedDays.map((entry) {
+                            final dayRows = rows.where((row) => row['day_of_week'] == entry.key).toList()
+                              ..sort((a, b) => clock(a['starts_at']).compareTo(clock(b['starts_at'])));
+                            if (dayRows.isEmpty) return const SizedBox.shrink();
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 20),
+                              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                Row(children: [
+                                  Container(width: 7, height: 23,
+                                    decoration: BoxDecoration(color: colors.primary, borderRadius: BorderRadius.circular(10))),
+                                  const SizedBox(width: 9),
+                                  Text(entry.value, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900)),
+                                  const SizedBox(width: 8),
+                                  Text(dayRows.length.toString() + ' محاضرة',
+                                    style: TextStyle(color: colors.onSurfaceVariant, fontSize: 10)),
+                                ]),
+                                const SizedBox(height: 10),
+                                ...dayRows.map((item) => _ScheduleLessonCard(
+                                  item: item,
+                                  time: clock(item['starts_at']) + ' – ' + clock(item['ends_at']),
+                                )),
+                              ]),
+                            );
+                          }),
+                        ],
+                      ),
+          ),
+        ]);
+      },
+    );
+  }
+}
+
+class _ScheduleLessonCard extends StatelessWidget {
+  final Map<String, dynamic> item;
+  final String time;
+  const _ScheduleLessonCard({required this.item, required this.time});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final subject = item['subjects'] is Map
+        ? (item['subjects']['name_ar'] ?? item['subjects']['name_en'] ?? 'محاضرة').toString()
+        : 'محاضرة';
+    final location = (item['location'] ?? 'المكان غير محدد').toString();
+    final instructor = (item['instructor'] ?? 'المحاضر غير محدد').toString();
+    final isLecture = item['class_type'] == 'lecture';
+    final tint = isLecture ? const Color(0xFF5964D8) : const Color(0xFF21978D);
+    final group = item['groups'] is Map
+        ? (item['groups']['code'] ?? item['groups']['name'] ?? '').toString()
+        : '';
+    final section = item['sections'] is Map
+        ? (item['sections']['name'] ?? '').toString()
+        : '';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 9),
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(19),
+        border: Border.all(color: colors.outlineVariant.withValues(alpha: .6)),
+      ),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(
+          width: 49, height: 55,
+          decoration: BoxDecoration(color: tint.withValues(alpha: .11), borderRadius: BorderRadius.circular(15)),
+          child: Icon(isLecture ? Icons.menu_book_rounded : Icons.groups_rounded, color: tint, size: 24),
         ),
-        title: Text(subject, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 5),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(days[day] + ' • ' + time, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 3),
-            Text(location + ' • ' + instructor, style: const TextStyle(fontSize: 11)),
+        const SizedBox(width: 12),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(subject, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 7),
+          Row(children: [
+            Icon(Icons.access_time_rounded, size: 14, color: colors.primary),
+            const SizedBox(width: 5),
+            Text(time, style: TextStyle(color: colors.primary, fontSize: 11, fontWeight: FontWeight.w800)),
+            if (group.isNotEmpty || section.isNotEmpty) ...[
+              const SizedBox(width: 10),
+              Flexible(child: Text([group, section].where((v) => v.isNotEmpty).join(' • '),
+                maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: colors.onSurfaceVariant, fontSize: 10))),
+            ],
           ]),
-        ),
-        isThreeLine: true,
-        trailing: Icon(
-          item['class_type'] == 'lecture' ? Icons.menu_book_rounded : Icons.groups_rounded,
-          color: const Color(0xFF7771C9), size: 19),
-      );
-    },
-  );
+          const SizedBox(height: 7),
+          Wrap(spacing: 12, runSpacing: 5, children: [
+            _ScheduleMeta(icon: Icons.location_on_outlined, value: location),
+            _ScheduleMeta(icon: Icons.person_outline_rounded, value: instructor),
+          ]),
+        ])),
+      ]),
+    );
+  }
+}
+
+class _ScheduleMeta extends StatelessWidget {
+  final IconData icon;
+  final String value;
+  const _ScheduleMeta({required this.icon, required this.value});
+  @override
+  Widget build(BuildContext context) => Row(mainAxisSize: MainAxisSize.min, children: [
+    Icon(icon, size: 13, color: Theme.of(context).colorScheme.onSurfaceVariant),
+    const SizedBox(width: 4),
+    Flexible(child: Text(value, style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant))),
+  ]);
 }
 
 class AnnouncementsPage extends StatelessWidget {const AnnouncementsPage({super.key});@override Widget build(BuildContext c)=>_AsyncList<Map<String,dynamic>>(future:AcadMindData.announcements(),empty:'لا توجد إعلانات حالياً',builder:(e)=>_AnnouncementCard(item:e));}
