@@ -3,6 +3,28 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../backend.dart';
 
+bool _validYoutubeUrl(String raw) {
+  final uri = Uri.tryParse(raw.trim());
+  if (uri == null || uri.scheme != 'https') return false;
+  final host = uri.host.toLowerCase();
+  return host == 'youtu.be' ||
+      host == 'youtube.com' ||
+      host == 'www.youtube.com' ||
+      host == 'm.youtube.com' ||
+      host == 'music.youtube.com' ||
+      host == 'youtube-nocookie.com' ||
+      host == 'www.youtube-nocookie.com';
+}
+
+bool _validDriveUrl(String raw) {
+  final uri = Uri.tryParse(raw.trim());
+  if (uri == null || uri.scheme != 'https') return false;
+  final host = uri.host.toLowerCase();
+  return host == 'drive.google.com' ||
+      host == 'docs.google.com' ||
+      host == 'drive.usercontent.google.com';
+}
+
 class OwnerConsole extends StatefulWidget {
   const OwnerConsole({super.key});
   @override State<OwnerConsole> createState() => _OwnerConsoleState();
@@ -86,10 +108,106 @@ Future<void> manageContent(Map<String,dynamic> subject)async{
   if(!mounted)return;
   await showDialog(context:context,builder:(ctx)=>AlertDialog(title:Text('محتوى ${subject['name_ar']}'),content:SizedBox(width:460,child:SingleChildScrollView(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[const Text('المحاضرات',style:TextStyle(fontWeight:FontWeight.bold)),...lectures.map((x)=>ListTile(dense:true,title:Text('${x['title']}'),trailing:IconButton(icon:const Icon(Icons.delete_outline),onPressed:()async{await supabase.from('lectures').update({'is_active':false}).eq('id',x['id']);if(ctx.mounted)Navigator.pop(ctx);manageContent(subject);}))),const Divider(),const Text('فيديوهات YouTube',style:TextStyle(fontWeight:FontWeight.bold)),...videos.map((x)=>ListTile(dense:true,title:Text('${x['title']}'),trailing:IconButton(icon:const Icon(Icons.delete_outline),onPressed:()async{await supabase.from('youtube_resources').update({'is_active':false}).eq('id',x['id']);if(ctx.mounted)Navigator.pop(ctx);manageContent(subject);}))),const Divider(),const Text('مجلدات Google Drive',style:TextStyle(fontWeight:FontWeight.bold)),...drives.map((x)=>ListTile(dense:true,title:Text('${x['folder_name']}'),trailing:IconButton(icon:const Icon(Icons.delete_outline),onPressed:()async{await supabase.from('drive_folders').update({'is_active':false}).eq('id',x['id']);if(ctx.mounted)Navigator.pop(ctx);manageContent(subject);}))) ]))),actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إغلاق'))]));
 }
-Future<void> _simpleForm(String title,List<(String,String)> fields,Future<void> Function(List<String>) save)async{final cs=fields.map((e)=>TextEditingController()).toList();if(!mounted)return;await showDialog(context:context,builder:(ctx)=>AlertDialog(title:Text(title),content:SizedBox(width:420,child:Column(mainAxisSize:MainAxisSize.min,children:List.generate(fields.length,(i)=>Padding(padding:const EdgeInsets.only(bottom:8),child:TextField(controller:cs[i],decoration:InputDecoration(labelText:fields[i].$1),keyboardType:fields[i].$2=='url'?TextInputType.url:TextInputType.text))))),actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إلغاء')),FilledButton(onPressed:()async{try{await save(cs.map((e)=>e.text.trim()).toList());if(ctx.mounted)Navigator.pop(ctx);reload();}catch(e){if(ctx.mounted)ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content:Text('فشل: $e')));}},child:const Text('حفظ'))]));for(final x in cs){x.dispose();}}
-Future<void> _addLecture(Map s)=>_simpleForm('إضافة محاضرة', [('عنوان المحاضرة','text'),('رقم المحاضرة','text'),('الموضوع','text'),('الوصف','text')],(v)async{await supabase.from('lectures').insert({'subject_id':s['id'],'title':v[0],'lecture_number':int.tryParse(v[1]),'topic':v[2],'description':v[3],'is_active':true});});
-Future<void> _addYoutube(Map s)=>_simpleForm('إضافة فيديو', [('عنوان الفيديو','text'),('رابط YouTube (HTTPS)','url'),('القناة','text'),('الوصف','text')],(v)async{final u=Uri.tryParse(v[1]);if(v[0].isEmpty||u==null||u.scheme!='https'||!(u.host=='youtube.com'||u.host=='www.youtube.com'||u.host=='youtu.be'))throw Exception('أدخل رابط يوتيوب صحيح');await supabase.from('youtube_resources').insert({'subject_id':s['id'],'title':v[0],'youtube_url':v[1],'channel':v[2],'description':v[3],'is_active':true});});
-Future<void> _addDrive(Map s)async{await _simpleForm('إضافة مجلد Drive', [('اسم المجلد','text'),('رابط Google Drive','url'),('الوصف','text')],(v)async{final u=Uri.tryParse(v[1]);if(u==null||u.scheme!='https'||u.host!='drive.google.com')throw Exception('الرابط يجب أن يكون Google Drive');await supabase.from('drive_folders').insert({'subject_id':s['id'],'academic_year_id':s['academic_year_id'],'folder_name':v[0],'folder_url':v[1],'description':v[2],'is_active':true});});}
+Future<void> _simpleForm(String title,List<(String,String)> fields,Future<void> Function(List<String>) save)async{
+  final cs=fields.map((e)=>TextEditingController()).toList();
+  if(!mounted)return;
+  await showDialog(context:context,builder:(ctx)=>AlertDialog(
+    title:Text(title),
+    content:SizedBox(width:440,height:MediaQuery.sizeOf(ctx).height*0.58,
+      child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:List.generate(fields.length,(i)=>Padding(
+        padding:const EdgeInsets.only(bottom:10),
+        child:TextField(
+          controller:cs[i],
+          keyboardType:fields[i].$2=='url'?TextInputType.url:TextInputType.text,
+          autocorrect:fields[i].$2!='url',
+          textDirection:fields[i].$2=='url'?TextDirection.ltr:TextDirection.rtl,
+          decoration:InputDecoration(labelText:fields[i].$1,prefixIcon:fields[i].$2=='url'?const Icon(Icons.link_rounded):null),
+        ),
+      )))),
+    ),
+    actions:[
+      TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إلغاء')),
+      FilledButton(onPressed:()async{
+        try{
+          await save(cs.map((e)=>e.text.trim()).toList());
+          if(ctx.mounted)Navigator.pop(ctx);
+          reload();
+        }catch(e){
+          if(ctx.mounted)ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content:Text('فشل الحفظ: $e')));
+        }
+      },child:const Text('حفظ')),
+    ],
+  ));
+  for(final x in cs){x.dispose();}
+}
+Future<void> _addLecture(Map s)=>_simpleForm('إضافة محاضرة', [
+  ('اسم المحاضرة','text'),
+  ('رقم المحاضرة','text'),
+  ('الموضوع','text'),
+  ('وصف المحاضرة','text'),
+  ('عنوان فيديو الشرح (اختياري)','text'),
+  ('رابط فيديو الشرح على YouTube (اختياري)','url'),
+  ('اسم القناة (اختياري)','text'),
+],(v)async{
+  if(v[0].isEmpty) throw Exception('اسم المحاضرة مطلوب');
+  if(v[5].isNotEmpty && !_validYoutubeUrl(v[5])) {
+    throw Exception('رابط YouTube غير صحيح. استخدم رابطًا يبدأ بـ https://youtube.com أو https://youtu.be');
+  }
+  final lecture = await supabase.from('lectures').insert({
+    'subject_id':s['id'],
+    'title':v[0],
+    'lecture_number':int.tryParse(v[1]),
+    'topic':v[2],
+    'description':v[3],
+    'is_active':true,
+  }).select('id').single();
+  if(v[5].isNotEmpty) {
+    await supabase.from('youtube_resources').insert({
+      'subject_id':s['id'],
+      'lecture_id':lecture['id'],
+      'title':v[4].isEmpty?'فيديو شرح ${v[0]}':v[4],
+      'youtube_url':v[5],
+      'channel':v[6].isEmpty?null:v[6],
+      'description':'فيديو الشرح المرتبط بمحاضرة ${v[0]}',
+      'is_active':true,
+    });
+  }
+});
+Future<void> _addYoutube(Map s)=>_simpleForm('إضافة فيديو للمادة', [
+  ('عنوان الفيديو','text'),
+  ('رابط YouTube','url'),
+  ('القناة (اختياري)','text'),
+  ('الوصف (اختياري)','text'),
+],(v)async{
+  if(v[0].isEmpty) throw Exception('عنوان الفيديو مطلوب');
+  if(!_validYoutubeUrl(v[1])) throw Exception('رابط YouTube غير صحيح. استخدم https://youtube.com أو https://youtu.be');
+  await supabase.from('youtube_resources').insert({
+    'subject_id':s['id'],
+    'title':v[0],
+    'youtube_url':v[1],
+    'channel':v[2].isEmpty?null:v[2],
+    'description':v[3].isEmpty?null:v[3],
+    'is_active':true,
+  });
+});
+Future<void> _addDrive(Map s)async{
+  await _simpleForm('إضافة رابط ملفات المادة', [
+    ('اسم الملف أو المجلد','text'),
+    ('رابط Google Drive / Docs','url'),
+    ('الوصف (اختياري)','text'),
+  ],(v)async{
+    if(v[0].isEmpty) throw Exception('اسم الملف أو المجلد مطلوب');
+    if(!_validDriveUrl(v[1])) throw Exception('الرابط يجب أن يكون من Google Drive أو Google Docs ويبدأ بـ https://');
+    await supabase.from('drive_folders').insert({
+      'subject_id':s['id'],
+      'academic_year_id':s['academic_year_id'],
+      'folder_name':v[0],
+      'folder_url':v[1],
+      'description':v[2].isEmpty?null:v[2],
+      'is_active':true,
+    });
+  });
+}
 @override Widget build(BuildContext c)=>FutureBuilder<List<Map<String,dynamic>>>(future:future,builder:(c,s){if(!s.hasData)return s.hasError?Center(child:Text('${s.error}')):const Center(child:CircularProgressIndicator());return RefreshIndicator(onRefresh:()async=>reload(),child:ListView(padding:const EdgeInsets.all(12),children:[FilledButton.icon(onPressed:addSubject,icon:const Icon(Icons.add),label:const Text('إضافة مادة جديدة')),...s.data!.map((x)=>Card(child:ListTile(leading:CircleAvatar(child:Icon(switch(x['icon_path']){'business'=>Icons.business_center,'language'=>Icons.translate,'computer'=>Icons.computer,'code'=>Icons.code,'science'=>Icons.science,'calculate'=>Icons.functions,_=>Icons.menu_book})),title:Text('${x['name_ar']}'),subtitle:Text('${x['code']??''} • ${x['is_active']?'مفعلة':'مخفية'}'),trailing:IconButton(icon:const Icon(Icons.more_vert),onPressed:()=>subjectActions(x)))))]));});}
 
 class SchedulesAdmin extends StatefulWidget {
