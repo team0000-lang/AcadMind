@@ -74,7 +74,7 @@ class NotificationService {
 
       final subjectData = row['subjects'];
       final subject = subjectData is Map
-          ? (subjectData['name_en'] ?? 'your class').toString()
+          ? (subjectData['name_en'] ?? 'محاضرتك').toString()
           : 'محاضرتك';
       final location = (row['location'] ?? '').toString();
       final where = location.isEmpty ? '' : ' — $location';
