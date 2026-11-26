@@ -151,7 +151,15 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
       final text=(data['answer']??data['error']??'لم يصل رد من المساعد.').toString();
       if(mounted)setState(()=>answer=text);
     }on FunctionException catch(e){
-      if(mounted)setState(()=>answer='تعذر تشغيل الأداة: ${e.details??e.reasonPhrase??e.toString()}');
+      final detail=e.details is Map
+          ? ((e.details as Map)['error']??(e.details as Map)['message']??'').toString()
+          : (e.details?.toString()??'');
+      final message=e.status==401
+          ? 'جلسة الدخول انتهت أو غير موجودة. سجّل الدخول مرة أخرى.'
+          : e.status==504
+              ? 'Gemini اتأخر في الرد. جرّب محتوى أقصر أو أعد المحاولة.'
+              : detail.isNotEmpty?detail:(e.reasonPhrase??'حاول مرة أخرى.');
+      if(mounted)setState(()=>answer='تعذر تشغيل الأداة: $message');
     }catch(e){
       if(mounted)setState(()=>answer='حدث خطأ أثناء الاتصال بخدمة الذكاء الاصطناعي. تأكد من الاتصال وإعداد الخدمة ثم حاول مرة أخرى.');
     }finally{if(mounted)setState(()=>busy=false);}
