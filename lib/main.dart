@@ -54,7 +54,6 @@ class AcadMindApp extends StatelessWidget {
           margin: EdgeInsets.zero,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24), side: const BorderSide(color: Color(0xFFE9EAF4))),
         ),
-        appBarTheme: const AppBarTheme(centerTitle: false, surfaceTintColor: Colors.transparent, elevation: 0),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: Colors.white,
