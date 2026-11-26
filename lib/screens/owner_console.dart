@@ -67,7 +67,7 @@ class _SchedulesAdminState extends State<SchedulesAdmin> {
   late Future<List<Map<String,dynamic>>> future;
   @override void initState(){super.initState();future=load();}
   Future<List<Map<String,dynamic>>> load()=>supabase.from('schedules')
-    .select('id,day_of_week,starts_at,ends_at,class_type,location,instructor,is_active,academic_year_id,group_id,section_id,subjects(name_ar),groups(name),sections(name)')
+    .select('id,subject_id,day_of_week,starts_at,ends_at,class_type,location,instructor,is_active,academic_year_id,group_id,section_id,subjects(name_ar),groups(name),sections(name)')
     .isFilter('deleted_at',null).order('day_of_week').order('starts_at')
     .then((v)=>List<Map<String,dynamic>>.from(v));
   void reload(){if(mounted)setState(()=>future=load());widget.onChanged();}
@@ -99,12 +99,12 @@ Future<void> _scheduleForm(BuildContext context,VoidCallback done,{Map<String,dy
   if(years.isEmpty||!context.mounted)return;
   String year='${row?['academic_year_id']??years.first['id']}';
   String? subject=row?['subject_id']?.toString();
-  if(subject==null && row?['subjects'] is Map) subject=subjects.where((e)=>e['name_ar']==row!['subjects']['name_ar']).map((e)=>'${e['id']}').firstOrNull;
+  if(subject==null && row?['subject_id']!=null) subject='${row!['subject_id']}';
   final subjectOptions=subjects.where((e)=>e['academic_year_id']==year).toList();
   subject??=subjectOptions.isEmpty?null:'${subjectOptions.first['id']}';
-  final groups=List<Map<String,dynamic>>.from(await supabase.from('groups').select('id,name,academic_year_id').eq('academic_year_id',year).eq('is_active',true).order('display_order'));
+  var groups=List<Map<String,dynamic>>.from(await supabase.from('groups').select('id,name,academic_year_id').eq('academic_year_id',year).eq('is_active',true).order('display_order'));
   String? group=row?['group_id']?.toString();
-  final sections=group==null? <Map<String,dynamic>>[] : List<Map<String,dynamic>>.from(await supabase.from('sections').select('id,name,group_id').eq('group_id',group).eq('is_active',true).order('display_order'));
+  var sections=group==null? <Map<String,dynamic>>[] : List<Map<String,dynamic>>.from(await supabase.from('sections').select('id,name,group_id').eq('group_id',group).eq('is_active',true).order('display_order'));
   String? section=row?['section_id']?.toString();
   int day=(row?['day_of_week'] as int?)??0;
   String type='${row?['class_type']??'lecture'}';
@@ -120,7 +120,7 @@ Future<void> _scheduleForm(BuildContext context,VoidCallback done,{Map<String,dy
       DropdownButtonFormField<String>(value:subject,decoration:const InputDecoration(labelText:'المادة'),items:subjects.where((e)=>e['academic_year_id']==year).map((e)=>DropdownMenuItem(value:'${e['id']}',child:Text('${e['name_ar']}'))).toList(),onChanged:(v)=>setD(()=>subject=v)),
       DropdownButtonFormField<int>(value:day,decoration:const InputDecoration(labelText:'اليوم'),items:List.generate(7,(i)=>DropdownMenuItem(value:i,child:Text(_day(i)))),onChanged:(v)=>setD(()=>day=v??0)),
       DropdownButtonFormField<String>(value:type,decoration:const InputDecoration(labelText:'نوع الحصة'),items:const [DropdownMenuItem(value:'lecture',child:Text('محاضرة')),DropdownMenuItem(value:'section',child:Text('سكشن')),DropdownMenuItem(value:'practical',child:Text('عملي')),DropdownMenuItem(value:'lab',child:Text('معمل'))],onChanged:(v)=>setD(()=>type=v??'lecture')),
-      DropdownButtonFormField<String>(value:group,decoration:const InputDecoration(labelText:'المجموعة (اختياري)'),items:groups.map((e)=>DropdownMenuItem(value:'${e['id']}',child:Text('${e['name']}'))).toList(),onChanged:(v)async{setD((){group=v;section=null;});}),
+      DropdownButtonFormField<String>(value:group,decoration:const InputDecoration(labelText:'المجموعة (اختياري)'),items:groups.map((e)=>DropdownMenuItem(value:'${e['id']}',child:Text('${e['name']}'))).toList(),onChanged:(v)async{final data=v==null?[]:await supabase.from('sections').select('id,name,group_id').eq('group_id',v).eq('is_active',true).order('display_order');if(!ctx.mounted)return;setD((){group=v;section=null;sections=List<Map<String,dynamic>>.from(data);});}),
       DropdownButtonFormField<String>(value:section,decoration:const InputDecoration(labelText:'السكشن (اختياري)'),items:sections.where((e)=>e['group_id']==group).map((e)=>DropdownMenuItem(value:'${e['id']}',child:Text('${e['name']}'))).toList(),onChanged:(v)=>setD(()=>section=v)),
       TextField(controller:teacher,decoration:const InputDecoration(labelText:'اسم المحاضر / المعيد')),
       TextField(controller:start,decoration:const InputDecoration(labelText:'وقت البداية HH:MM')),
