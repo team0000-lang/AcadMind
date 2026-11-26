@@ -126,6 +126,8 @@ class _HomeScreenState extends State<HomeScreen> {
    );
  }
 
+}
+
 class DashboardPage extends StatelessWidget {
   final ValueChanged<int> onNavigate;
   const DashboardPage({super.key, required this.onNavigate});
