@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../backend.dart';
+import 'home_screen.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -48,10 +49,29 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
         );
         msg('تم إنشاء الحساب. لو تأكيد البريد مفعّل، افتح رسالة التحقق ثم سجّل الدخول.');
       } else {
-        await supabase.auth.signInWithPassword(email: email.text.trim(), password: password.text);
+        final response = await supabase.auth.signInWithPassword(
+          email: email.text.trim(),
+          password: password.text,
+        );
+        if (response.session == null) {
+          msg('تم تسجيل الدخول لكن لم تُنشأ جلسة. تأكد من تأكيد البريد الإلكتروني ثم حاول مرة أخرى.');
+          return;
+        }
+        if (mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const HomeScreen()),
+          );
+        }
       }
     } on AuthException catch (e) {
-      msg(e.message);
+      final message = e.message.toLowerCase();
+      if (message.contains('email not confirmed') || message.contains('email_not_confirmed')) {
+        msg('البريد الإلكتروني غير مؤكد. افتح رسالة التأكيد ثم سجّل الدخول.');
+      } else if (message.contains('invalid login credentials')) {
+        msg('البريد الإلكتروني أو كلمة المرور غير صحيحة.');
+      } else {
+        msg(e.message);
+      }
     } catch (e) {
       msg('تعذر الاتصال. تأكد من الإنترنت وحاول مرة أخرى.');
     } finally {
