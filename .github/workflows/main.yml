@@ -93,7 +93,7 @@ jobs:
               if 'android:roundIcon=' in t:
                   t = re.sub(r'android:roundIcon="[^"]+"', 'android:roundIcon="@mipmap/ic_launcher_round"', t, count=1)
               else:
-                  t = t.replace('android:icon="@mipmap/ic_launcher"', 'android:icon="@mipmap/ic_launcher"\\n        android:roundIcon="@mipmap/ic_launcher_round"', 1)
+                  t = t.replace('android:icon="@mipmap/ic_launcher"', 'android:icon="@mipmap/ic_launcher"' + chr(10) + '        android:roundIcon="@mipmap/ic_launcher_round"', 1)
 
               permissions = []
               if 'android.permission.INTERNET' not in t:
@@ -101,7 +101,7 @@ jobs:
               if 'android.permission.POST_NOTIFICATIONS' not in t:
                   permissions.append('    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />')
               if permissions:
-                  t = t.replace('<application', '\\n'.join(permissions) + '\\n    <application', 1)
+                  t = t.replace('<application', chr(10).join(permissions) + chr(10) + '    <application', 1)
               manifest.write_text(t)
 
           icon_source = Path('assets/branding/acadmind_icon.png')
