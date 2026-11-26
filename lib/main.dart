@@ -39,8 +39,9 @@ class AcadMindApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         fontFamily: 'Roboto',
+        visualDensity: VisualDensity.standard,
         colorScheme: ColorScheme.fromSeed(seedColor: _brand, brightness: Brightness.light),
-        scaffoldBackgroundColor: const Color(0xFFF7F8FD),
+        scaffoldBackgroundColor: const Color(0xFFF5F6FC),
         appBarTheme: const AppBarTheme(
           centerTitle: false,
           backgroundColor: Color(0xFFF7F8FD),
@@ -51,8 +52,9 @@ class AcadMindApp extends StatelessWidget {
           elevation: 0,
           color: Colors.white,
           margin: EdgeInsets.zero,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22), side: const BorderSide(color: Color(0xFFECEEF6))),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24), side: const BorderSide(color: Color(0xFFE9EAF4))),
         ),
+        appBarTheme: const AppBarTheme(centerTitle: false, surfaceTintColor: Colors.transparent, elevation: 0),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: Colors.white,
@@ -65,8 +67,10 @@ class AcadMindApp extends StatelessWidget {
       darkTheme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF9A91FF), brightness: Brightness.dark),
-        scaffoldBackgroundColor: const Color(0xFF101322),
-        cardTheme: CardThemeData(elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22))),
+        scaffoldBackgroundColor: const Color(0xFF0C1020),
+        cardTheme: CardThemeData(color: const Color(0xFF171D32), elevation: 0, margin: EdgeInsets.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24), side: const BorderSide(color: Color(0xFF28304A)))),
+        appBarTheme: const AppBarTheme(backgroundColor: Color(0xFF0C1020), surfaceTintColor: Colors.transparent, elevation: 0),
+        inputDecorationTheme: InputDecorationTheme(filled: true, fillColor: const Color(0xFF171D32), contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15), border: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: const BorderSide(color: Color(0xFF28304A))), enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: const BorderSide(color: Color(0xFF28304A))), focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: const BorderSide(color: Color(0xFF9A91FF), width: 1.5))),
       ),
       home: const SplashGate(),
     ),
