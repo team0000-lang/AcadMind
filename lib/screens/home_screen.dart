@@ -238,7 +238,9 @@ class DashboardPage extends StatelessWidget {
                 ]),
               ]),
             ),
-            const SizedBox(height: 27),
+            const SizedBox(height: 22),
+            _TodayScheduleSection(onOpenSchedule: () => onNavigate(2)),
+            const SizedBox(height: 24),
             Row(children: [
               const Expanded(child: Text('وصول سريع', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900))),
               Text('اختار وابدأ', style: TextStyle(color: colors.onSurfaceVariant, fontSize: 10)),
@@ -311,6 +313,186 @@ class DashboardPage extends StatelessWidget {
             ),
           ],
         );
+      },
+    );
+  }
+}
+
+class _TodayScheduleSection extends StatefulWidget {
+  final VoidCallback onOpenSchedule;
+  const _TodayScheduleSection({required this.onOpenSchedule});
+
+  @override
+  State<_TodayScheduleSection> createState() => _TodayScheduleSectionState();
+}
+
+class _TodayScheduleSectionState extends State<_TodayScheduleSection> {
+  late Future<List<Map<String, dynamic>>> future;
+
+  static const _days = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+
+  @override
+  void initState() {
+    super.initState();
+    future = AcadMindData.schedule();
+    profileScopeRevision.addListener(_scopeChanged);
+  }
+
+  void _scopeChanged() {
+    if (mounted) setState(() => future = AcadMindData.schedule());
+  }
+
+  @override
+  void dispose() {
+    profileScopeRevision.removeListener(_scopeChanged);
+    super.dispose();
+  }
+
+  String _clock(Object? value) {
+    final raw = (value ?? '').toString();
+    return raw.length >= 5 ? raw.substring(0, 5) : raw;
+  }
+
+  String _lessonState(Map<String, dynamic> row, int currentMinutes) {
+    final start = _clock(row['starts_at']).split(':');
+    final end = _clock(row['ends_at']).split(':');
+    if (start.length < 2 || end.length < 2) return 'حسب الموعد';
+    final startMinutes = (int.tryParse(start[0]) ?? 0) * 60 + (int.tryParse(start[1]) ?? 0);
+    final endMinutes = (int.tryParse(end[0]) ?? 0) * 60 + (int.tryParse(end[1]) ?? 0);
+    if (currentMinutes < startMinutes) return 'قادمة';
+    if (currentMinutes < endMinutes) return 'بدأت الآن';
+    return 'انتهت';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final now = DateTime.now();
+    final today = now.weekday % 7;
+    final currentMinutes = now.hour * 60 + now.minute;
+
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: future,
+      builder: (context, snapshot) {
+        final rows = snapshot.data ?? <Map<String, dynamic>>[];
+        final lessons = rows.where((row) => row['day_of_week'] == today).toList()
+          ..sort((a, b) => _clock(a['starts_at']).compareTo(_clock(b['starts_at'])));
+
+        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('جدول محاضرات النهارده', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 3),
+              Text('${_days[today]} • ${now.day}/${now.month}/${now.year}',
+                style: TextStyle(color: colors.onSurfaceVariant, fontSize: 10)),
+            ])),
+            TextButton.icon(
+              onPressed: widget.onOpenSchedule,
+              icon: const Icon(Icons.arrow_back_rounded, size: 15),
+              label: const Text('الجدول الكامل'),
+            ),
+          ]),
+          const SizedBox(height: 9),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFA726).withValues(alpha: .11),
+              borderRadius: BorderRadius.circular(13),
+              border: Border.all(color: const Color(0xFFFFA726).withValues(alpha: .25)),
+            ),
+            child: const Row(children: [
+              Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFFB87919)),
+              SizedBox(width: 8),
+              Expanded(child: Text('المواعيد الحالية تقريبية وتحتاج تأكيد الإدارة.',
+                style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF986318)))),
+            ]),
+          ),
+          const SizedBox(height: 10),
+          if (snapshot.connectionState == ConnectionState.waiting)
+            const Center(child: Padding(padding: EdgeInsets.all(18), child: CircularProgressIndicator()))
+          else if (snapshot.hasError)
+            _ErrorBox(message: 'تعذر تحميل محاضرات اليوم: ${snapshot.error}')
+          else if (lessons.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(17),
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardColor,
+                borderRadius: BorderRadius.circular(19),
+                border: Border.all(color: colors.outlineVariant.withValues(alpha: .6)),
+              ),
+              child: Row(children: [
+                Icon(Icons.event_available_rounded, color: colors.primary, size: 25),
+                const SizedBox(width: 10),
+                const Expanded(child: Text('مفيش محاضرات أو سكاشن مسجلة ليك النهارده.',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700))),
+              ]),
+            )
+          else
+            ...lessons.map((lesson) {
+              final subjectData = lesson['subjects'];
+              final subjectName = subjectData is Map
+                  ? (subjectData['name_ar'] ?? subjectData['name_en'] ?? 'محاضرة').toString()
+                  : 'محاضرة';
+              final groupData = lesson['groups'];
+              final sectionData = lesson['sections'];
+              final group = groupData is Map ? (groupData['code'] ?? '').toString() : '';
+              final section = sectionData is Map ? (sectionData['name'] ?? '').toString() : '';
+              final scope = [group, section].where((v) => v.isNotEmpty).join(' • ');
+              final location = (lesson['location'] ?? 'المكان غير محدد').toString();
+              final instructor = (lesson['instructor'] ?? 'المحاضر غير محدد').toString();
+              final state = _lessonState(lesson, currentMinutes);
+              final active = state == 'بدأت الآن';
+              final typeLabel = lesson['class_type'] == 'lecture' ? 'محاضرة' : 'سكشن';
+              return Container(
+                margin: const EdgeInsets.only(bottom: 9),
+                padding: const EdgeInsets.all(13),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).cardColor,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: active ? colors.primary.withValues(alpha: .55) : colors.outlineVariant.withValues(alpha: .55)),
+                ),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Container(
+                    width: 66,
+                    padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 5),
+                    decoration: BoxDecoration(
+                      color: colors.primary.withValues(alpha: .09),
+                      borderRadius: BorderRadius.circular(13),
+                    ),
+                    child: Column(children: [
+                      Text(_clock(lesson['starts_at']), style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12, color: colors.primary)),
+                      const SizedBox(height: 3),
+                      Text(_clock(lesson['ends_at']), style: TextStyle(fontSize: 10, color: colors.onSurfaceVariant)),
+                    ]),
+                  ),
+                  const SizedBox(width: 11),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Row(children: [
+                      Expanded(child: Text(subjectName, maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900))),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: active ? colors.primary.withValues(alpha: .12) : colors.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(state, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: active ? colors.primary : colors.onSurfaceVariant)),
+                      ),
+                    ]),
+                    const SizedBox(height: 5),
+                    Wrap(spacing: 7, runSpacing: 3, children: [
+                      Text(typeLabel, style: TextStyle(color: colors.primary, fontSize: 10, fontWeight: FontWeight.w800)),
+                      if (scope.isNotEmpty) Text(scope, style: TextStyle(color: colors.onSurfaceVariant, fontSize: 10)),
+                    ]),
+                    const SizedBox(height: 5),
+                    Text('$location • $instructor', maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: colors.onSurfaceVariant, fontSize: 10)),
+                  ])),
+                ]),
+              );
+            }),
+        ]);
       },
     );
   }
