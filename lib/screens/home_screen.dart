@@ -10,6 +10,7 @@ import 'owner_console.dart';
 import 'feedback_screen.dart';
 import 'about_screen.dart';
 import 'study_tools.dart';
+import 'student_setup_screen.dart';
 import '../app_preferences.dart';
 
 class HomeScreen extends StatefulWidget { const HomeScreen({super.key}); @override State<HomeScreen> createState()=>_HomeScreenState(); }
@@ -31,11 +32,11 @@ class _HomeScreenState extends State<HomeScreen> {
      if (owner) const OwnerPage(),
    ];
    final items = <_HomeNavItem>[
-     _HomeNavItem(Icons.home_outlined, Icons.home_rounded, 'الرئيسية', 0),
-     _HomeNavItem(Icons.menu_book_outlined, Icons.menu_book_rounded, 'المواد', 1),
-     _HomeNavItem(Icons.calendar_month_outlined, Icons.calendar_month_rounded, 'الجدول', 2),
-     _HomeNavItem(Icons.auto_awesome_outlined, Icons.auto_awesome_rounded, 'AI', 4),
-     _HomeNavItem(Icons.person_outline_rounded, Icons.person_rounded, 'حسابي', 5),
+     _HomeNavItem(Icons.home_rounded, Icons.home_rounded, 'الرئيسية', 0),
+     _HomeNavItem(Icons.auto_stories_rounded, Icons.auto_stories_rounded, 'المواد', 1),
+     _HomeNavItem(Icons.calendar_month_rounded, Icons.calendar_month_rounded, 'الجدول', 2),
+     _HomeNavItem(Icons.psychology_alt_rounded, Icons.psychology_alt_rounded, 'AI', 4),
+     _HomeNavItem(Icons.account_circle_rounded, Icons.account_circle_rounded, 'حسابي', 5),
    ];
    return Scaffold(
      extendBody: true,
@@ -132,6 +133,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
 }
 
+
 class DashboardPage extends StatelessWidget {
   final ValueChanged<int> onNavigate;
   const DashboardPage({super.key, required this.onNavigate});
@@ -139,94 +141,176 @@ class DashboardPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
-      children: [
-        FutureBuilder<Map<String, dynamic>>(
-          future: AcadMindData.profile(),
-          builder: (context, snapshot) {
-            final profile = snapshot.data;
-            final rawName = (profile?['full_name'] ?? '').toString().trim();
-            final name = rawName.isEmpty ? 'يا بطل' : rawName.split(' ').first;
-            final academic = profile?['academic_years'];
-            final year = academic is Map ? (academic['name_ar'] ?? '').toString() : '';
-            return Container(
-              padding: const EdgeInsets.all(22),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(begin: Alignment.topRight, end: Alignment.bottomLeft, colors: [Color(0xFF27215F), Color(0xFF5549D8), Color(0xFF8276FF)]),
-                borderRadius: BorderRadius.circular(27),
-                boxShadow: [BoxShadow(color: const Color(0xFF5549D8).withValues(alpha: .20), blurRadius: 24, offset: const Offset(0, 11))],
-              ),
-              child: Stack(
-                children: [
-                  Positioned(left: -12, top: -16, child: Icon(Icons.auto_awesome, size: 105, color: Colors.white.withValues(alpha: .08))),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(children: [
-                        Container(width: 38, height: 38, decoration: BoxDecoration(color: Colors.white.withValues(alpha: .15), borderRadius: BorderRadius.circular(13)), child: const Icon(Icons.waving_hand_rounded, color: Colors.white, size: 20)),
-                        const SizedBox(width: 10),
-                        const Text('مساحتك الدراسية', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
-                      ]),
-                      const SizedBox(height: 18),
-                      Text('أهلاً، $name 👋', style: const TextStyle(color: Colors.white, fontSize: 25, fontWeight: FontWeight.w900)),
-                      const SizedBox(height: 7),
-                      Text(year.isEmpty ? 'كل اللي تحتاجه علشان تذاكر بذكاء في مكان واحد.' : year, style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                      const SizedBox(height: 20),
-                      SizedBox(
-                        height: 43,
-                        child: FilledButton.tonalIcon(
-                          onPressed: () => onNavigate(4),
-                          icon: const Icon(Icons.auto_awesome_rounded, size: 17),
-                          label: const Text('ابدأ محادثة مع AI'),
-                          style: FilledButton.styleFrom(backgroundColor: Colors.white, foregroundColor: const Color(0xFF4339BD), padding: const EdgeInsets.symmetric(horizontal: 15)),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
-        const SizedBox(height: 25),
-        Row(children: [
-          const Expanded(child: Text('اختصاراتك', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900))),
-          Text('الوصول السريع', style: TextStyle(color: colors.onSurfaceVariant, fontSize: 11)),
-        ]),
-        const SizedBox(height: 13),
-        GridView.count(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: 2,
-          mainAxisSpacing: 11,
-          crossAxisSpacing: 11,
-          childAspectRatio: 1.42,
+    return FutureBuilder<Map<String, dynamic>>(
+      future: AcadMindData.profile(),
+      builder: (context, snapshot) {
+        final profile = snapshot.data ?? <String, dynamic>{};
+        final rawName = (profile['full_name'] ?? '').toString().trim();
+        final name = rawName.isEmpty ? 'يا بطل' : rawName.split(' ').first;
+        final yearData = profile['academic_years'];
+        final groupData = profile['groups'];
+        final sectionData = profile['sections'];
+        final year = yearData is Map ? (yearData['name_ar'] ?? '').toString() : '';
+        final group = groupData is Map ? (groupData['code'] ?? groupData['name'] ?? '').toString() : '';
+        final section = sectionData is Map ? (sectionData['name'] ?? '').toString() : '';
+        final scope = [group, section].where((value) => value.isNotEmpty).join(' • ');
+
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(18, 14, 18, 34),
           children: [
-            _QuickTile(icon: Icons.menu_book_rounded, title: 'المواد الدراسية', subtitle: 'محاضرات ومصادر', tint: const Color(0xFF5B65D8), onTap: () => onNavigate(1)),
-            _QuickTile(icon: Icons.calendar_month_rounded, title: 'جدول المحاضرات', subtitle: 'مواعيدك الأسبوعية', tint: const Color(0xFF1D9A91), onTap: () => onNavigate(2)),
-            _QuickTile(icon: Icons.campaign_rounded, title: 'الإعلانات', subtitle: 'آخر أخبار الكلية', tint: const Color(0xFFE18B42), onTap: () => onNavigate(3)),
-            _QuickTile(icon: Icons.auto_awesome_rounded, title: 'المساعد الذكي', subtitle: 'اسأل وذاكر بذكاء', tint: const Color(0xFF8B62D9), onTap: () => onNavigate(4)),
-            _QuickTile(icon: Icons.widgets_rounded, title: 'أدوات الدراسة الذكية', subtitle: '8 أدوات تساعدك تتعلم', tint: const Color(0xFFDB6A9B), onTap: () => onNavigate(6)),
+            Row(children: [
+              Container(width: 42, height: 42,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(begin: Alignment.topRight, end: Alignment.bottomLeft,
+                    colors: [Color(0xFF6255E8), Color(0xFF29245F)]),
+                  borderRadius: BorderRadius.circular(14)),
+                alignment: Alignment.center,
+                child: const Text('AM', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14))),
+              const SizedBox(width: 10),
+              const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('AcadMind', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: -.2)),
+                SizedBox(height: 2),
+                Text('YOUR STUDY SPACE', style: TextStyle(fontSize: 8, color: Color(0xFF898DA4), fontWeight: FontWeight.w800, letterSpacing: 1.2)),
+              ]),
+              const Spacer(),
+              Material(
+                color: Theme.of(context).cardColor,
+                borderRadius: BorderRadius.circular(14),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: () => onNavigate(3),
+                  child: Container(width: 43, height: 43,
+                    decoration: BoxDecoration(borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: colors.outlineVariant.withValues(alpha: .65))),
+                    child: Icon(Icons.notifications_none_rounded, color: colors.onSurface, size: 21)),
+                ),
+              ),
+            ]),
+            const SizedBox(height: 27),
+            Text('أهلاً، ' + name + ' 👋',
+              style: const TextStyle(fontSize: 25, fontWeight: FontWeight.w900, color: Color(0xFF222342))),
+            const SizedBox(height: 5),
+            Text(year.isEmpty ? 'جاهز تكمل رحلتك الدراسية؟' : year,
+              style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant)),
+            const SizedBox(height: 18),
+            Container(
+              padding: const EdgeInsets.all(21),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(begin: Alignment.topRight, end: Alignment.bottomLeft,
+                  colors: [Color(0xFF171A3D), Color(0xFF39328F), Color(0xFF6255E8)]),
+                borderRadius: BorderRadius.circular(26),
+                boxShadow: [BoxShadow(color: const Color(0xFF5145D6).withValues(alpha: .17), blurRadius: 24, offset: const Offset(0, 10))]),
+              child: Stack(children: [
+                Positioned(left: -28, top: -28,
+                  child: Container(width: 150, height: 150,
+                    decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white.withValues(alpha: .07), width: 22)))),
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [
+                    Container(width: 36, height: 36,
+                      decoration: BoxDecoration(color: Colors.white.withValues(alpha: .13), borderRadius: BorderRadius.circular(12)),
+                      child: const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 19)),
+                    const SizedBox(width: 9),
+                    const Text('SMART STUDY MODE',
+                      style: TextStyle(color: Colors.white70, fontSize: 9, fontWeight: FontWeight.w800, letterSpacing: 1.3)),
+                    const Spacer(),
+                    if (scope.isNotEmpty)
+                      Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(color: Colors.white.withValues(alpha: .13), borderRadius: BorderRadius.circular(30)),
+                        child: Text(scope, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700))),
+                  ]),
+                  const SizedBox(height: 20),
+                  const Text('ذاكر بذكاء،\nوخلّي وقتك ليك.',
+                    style: TextStyle(color: Colors.white, fontSize: 25, height: 1.35, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 8),
+                  Text('مساعدك الدراسي، جدولك، وموادك في مساحة واحدة.',
+                    style: TextStyle(color: Colors.white.withValues(alpha: .72), fontSize: 12, height: 1.6)),
+                  const SizedBox(height: 19),
+                  SizedBox(height: 44, child: FilledButton.tonalIcon(
+                    onPressed: () => onNavigate(4),
+                    icon: const Icon(Icons.arrow_back_rounded, size: 17),
+                    label: const Text('ابدأ مع المساعد الذكي'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.white, foregroundColor: const Color(0xFF40379E),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+                  )),
+                ]),
+              ]),
+            ),
+            const SizedBox(height: 27),
+            Row(children: [
+              const Expanded(child: Text('وصول سريع', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900))),
+              Text('اختار وابدأ', style: TextStyle(color: colors.onSurfaceVariant, fontSize: 10)),
+            ]),
+            const SizedBox(height: 13),
+            GridView.count(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: 2,
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              childAspectRatio: 1.72,
+              children: [
+                _QuickTile(icon: Icons.auto_stories_rounded, title: 'المواد الدراسية',
+                  subtitle: 'محاضرات ومصادر', tint: const Color(0xFF5964D8), onTap: () => onNavigate(1)),
+                _QuickTile(icon: Icons.calendar_month_rounded, title: 'جدول المحاضرات',
+                  subtitle: 'مواعيد مجموعتك', tint: const Color(0xFF209B8F), onTap: () => onNavigate(2)),
+                _QuickTile(icon: Icons.campaign_rounded, title: 'الإعلانات',
+                  subtitle: 'آخر أخبار الكلية', tint: const Color(0xFFE0954C), onTap: () => onNavigate(3)),
+                _QuickTile(icon: Icons.psychology_alt_rounded, title: 'المساعد الذكي',
+                  subtitle: 'اسأل وافهم أسرع', tint: const Color(0xFF8A63D6), onTap: () => onNavigate(4)),
+              ],
+            ),
+            const SizedBox(height: 11),
+            Material(
+              color: Theme.of(context).cardColor,
+              borderRadius: BorderRadius.circular(19),
+              child: InkWell(
+                onTap: () => onNavigate(6),
+                borderRadius: BorderRadius.circular(19),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(19),
+                    border: Border.all(color: colors.outlineVariant.withValues(alpha: .6))),
+                  child: Row(children: [
+                    Container(width: 43, height: 43,
+                      decoration: BoxDecoration(color: const Color(0xFFDA6B9B).withValues(alpha: .12), borderRadius: BorderRadius.circular(14)),
+                      child: const Icon(Icons.bolt_rounded, color: Color(0xFFDA6B9B), size: 23)),
+                    const SizedBox(width: 12),
+                    const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('أدوات الدراسة الذكية', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900)),
+                      SizedBox(height: 3),
+                      Text('تلخيص • كويز • فلاش كارد • تخطيط', style: TextStyle(fontSize: 10, color: Color(0xFF85899E))),
+                    ])),
+                    Icon(Icons.arrow_back_ios_new_rounded, size: 15, color: colors.onSurfaceVariant),
+                  ]),
+                ),
+              ),
+            ),
+            const SizedBox(height: 27),
+            Row(children: [
+              const Expanded(child: Text('آخر الإعلانات', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900))),
+              Icon(Icons.campaign_outlined, color: colors.primary, size: 20),
+            ]),
+            const SizedBox(height: 12),
+            FutureBuilder<List<Map<String, dynamic>>>(
+              future: AcadMindData.announcements(),
+              builder: (context, announcementSnapshot) {
+                if (announcementSnapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator()));
+                }
+                if (announcementSnapshot.hasError) {
+                  return _ErrorBox(message: 'تعذر تحميل الإعلانات: ' + announcementSnapshot.error.toString());
+                }
+                final items = announcementSnapshot.data ?? [];
+                if (items.isEmpty) return const _EmptyBox(text: 'لا توجد إعلانات حالياً');
+                return Column(children: items.take(3).map((item) =>
+                  Padding(padding: const EdgeInsets.only(bottom: 9), child: _AnnouncementCard(item: item))).toList());
+              },
+            ),
           ],
-        ),
-        const SizedBox(height: 25),
-        Row(children: [
-          const Expanded(child: Text('آخر الإعلانات', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900))),
-          Icon(Icons.notifications_none_rounded, color: colors.primary, size: 20),
-        ]),
-        const SizedBox(height: 12),
-        FutureBuilder<List<Map<String, dynamic>>>(
-          future: AcadMindData.announcements(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator()));
-            if (snapshot.hasError) return _ErrorBox(message: 'تعذر تحميل الإعلانات: ${snapshot.error}');
-            final items = snapshot.data ?? [];
-            if (items.isEmpty) return const _EmptyBox(text: 'لا توجد إعلانات حالياً');
-            return Column(children: items.take(3).map((item) => Padding(padding: const EdgeInsets.only(bottom: 9), child: _AnnouncementCard(item: item))).toList());
-          },
-        ),
-      ],
+        );
+      },
     );
   }
 }
@@ -236,28 +320,40 @@ class _QuickTile extends StatelessWidget {
   final String title, subtitle;
   final Color tint;
   final VoidCallback onTap;
-  const _QuickTile({required this.icon, required this.title, required this.subtitle, required this.tint, required this.onTap});
+  const _QuickTile({required this.icon, required this.title, required this.subtitle,
+    required this.tint, required this.onTap});
 
   @override
-  Widget build(BuildContext context) => Material(
-    color: Theme.of(context).cardColor,
-    borderRadius: BorderRadius.circular(21),
-    child: InkWell(
-      borderRadius: BorderRadius.circular(21),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(15),
-        decoration: BoxDecoration(borderRadius: BorderRadius.circular(21), border: Border.all(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: .55))),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-          Container(width: 39, height: 39, decoration: BoxDecoration(color: tint.withValues(alpha: .12), borderRadius: BorderRadius.circular(13)), child: Icon(icon, color: tint, size: 21)),
-          const SizedBox(height: 12),
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
-          const SizedBox(height: 3),
-          Text(subtitle, style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-        ]),
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Material(
+      color: Theme.of(context).cardColor,
+      borderRadius: BorderRadius.circular(19),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(19),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(19),
+            border: Border.all(color: colors.outlineVariant.withValues(alpha: .6))),
+          child: Row(children: [
+            Container(width: 43, height: 43,
+              decoration: BoxDecoration(color: tint.withValues(alpha: .12), borderRadius: BorderRadius.circular(14)),
+              child: Icon(icon, color: tint, size: 22)),
+            const SizedBox(width: 10),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center, children: [
+                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11.5)),
+                const SizedBox(height: 4),
+                Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 9, color: colors.onSurfaceVariant)),
+              ])),
+          ]),
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 IconData subjectIcon(String? key) => switch(key) {
@@ -339,8 +435,80 @@ class SubjectDetailPage extends StatelessWidget {
   );
 }
 
-class SchedulePage extends StatefulWidget {const SchedulePage({super.key});@override State<SchedulePage> createState()=>_SchedulePageState();}
-class _SchedulePageState extends State<SchedulePage> {static const days=['الأحد','الإثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];late Future<List<Map<String,dynamic>>> future;@override void initState(){super.initState();future=_load();}Future<List<Map<String,dynamic>>> _load()async{final rows=await AcadMindData.schedule();await NotificationService.instance.syncSchedule(rows);return rows;}@override Widget build(BuildContext c)=>_AsyncList<Map<String,dynamic>>(future:future,empty:'الجدول غير متاح بعد. تأكد أن الإدارة عيّنت السنة والمجموعة والشعبة لحسابك.',builder:(e)=>ListTile(leading:CircleAvatar(child:Text('${(e['day_of_week'] as int)+1}')),title:Text(((e['subjects'] is Map)?(e['subjects']['name_ar']??e['subjects']['name_en']):null)??'محاضرة'),subtitle:Text('${days[e['day_of_week'] as int]} • ${e['starts_at']} - ${e['ends_at']}\n${e['location']??''}\n${e['instructor']??'لم يحدد المحاضر'}'),isThreeLine:true,trailing:Text((e['class_type']??'') as String)));}
+
+class SchedulePage extends StatefulWidget {
+  const SchedulePage({super.key});
+  @override
+  State<SchedulePage> createState() => _SchedulePageState();
+}
+
+class _SchedulePageState extends State<SchedulePage> {
+  static const days = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+  late Future<List<Map<String, dynamic>>> future;
+
+  @override
+  void initState() {
+    super.initState();
+    future = loadSchedule();
+    profileScopeRevision.addListener(scopeChanged);
+  }
+
+  Future<List<Map<String, dynamic>>> loadSchedule() async {
+    final rows = await AcadMindData.schedule();
+    await NotificationService.instance.syncSchedule(rows);
+    return rows;
+  }
+
+  void scopeChanged() {
+    if (mounted) setState(() => future = loadSchedule());
+  }
+
+  @override
+  void dispose() {
+    profileScopeRevision.removeListener(scopeChanged);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => _AsyncList<Map<String, dynamic>>(
+    future: future,
+    empty: 'مفيش مواعيد مسجلة للمجموعة والسكشن بتوعك حالياً.',
+    builder: (item) {
+      final day = (item['day_of_week'] as int).clamp(0, 6);
+      final subject = item['subjects'] is Map
+          ? (item['subjects']['name_ar'] ?? item['subjects']['name_en'] ?? 'محاضرة').toString()
+          : 'محاضرة';
+      final time = item['starts_at'].toString().substring(0, 5) + ' - ' +
+          item['ends_at'].toString().substring(0, 5);
+      final location = (item['location'] ?? 'لم يحدد المكان').toString();
+      final instructor = (item['instructor'] ?? 'لم يحدد المحاضر').toString();
+      return ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        leading: Container(
+          width: 45, height: 45, alignment: Alignment.center,
+          decoration: BoxDecoration(color: const Color(0xFF5145D6).withValues(alpha: .10),
+            borderRadius: BorderRadius.circular(14)),
+          child: Text((day + 1).toString(),
+            style: const TextStyle(color: Color(0xFF5145D6), fontWeight: FontWeight.w900, fontSize: 16)),
+        ),
+        title: Text(subject, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 5),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(days[day] + ' • ' + time, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 3),
+            Text(location + ' • ' + instructor, style: const TextStyle(fontSize: 11)),
+          ]),
+        ),
+        isThreeLine: true,
+        trailing: Icon(
+          item['class_type'] == 'lecture' ? Icons.menu_book_rounded : Icons.groups_rounded,
+          color: const Color(0xFF7771C9), size: 19),
+      );
+    },
+  );
+}
+
 class AnnouncementsPage extends StatelessWidget {const AnnouncementsPage({super.key});@override Widget build(BuildContext c)=>_AsyncList<Map<String,dynamic>>(future:AcadMindData.announcements(),empty:'لا توجد إعلانات حالياً',builder:(e)=>_AnnouncementCard(item:e));}
 class _AnnouncementCard extends StatelessWidget {final Map<String,dynamic> item;const _AnnouncementCard({required this.item});@override Widget build(BuildContext c)=>Card(child:Padding(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Row(children:[const Icon(Icons.campaign,color:Color(0xFF3157D5)),const SizedBox(width:8),Expanded(child:Text((item['title']??'إعلان') as String,style:const TextStyle(fontWeight:FontWeight.bold,fontSize:16))),Text('${item['priority']??0}/5',style:const TextStyle(fontSize:11,color:Colors.black45))]),const SizedBox(height:8),Text((item['content']??'') as String),const SizedBox(height:5),Text((item['published_at']??'') as String,style:const TextStyle(fontSize:11,color:Colors.black45))])));}
 class AiPage extends StatefulWidget {
@@ -712,7 +880,7 @@ class _ProfilePageState extends State<ProfilePage> {
     await showDialog(context:context,builder:(ctx)=>AlertDialog(title:const Text('تعديل الملف الشخصي'),content:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:name,decoration:const InputDecoration(labelText:'الاسم')),TextField(controller:phone,decoration:const InputDecoration(labelText:'رقم الهاتف'))]),actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إلغاء')),FilledButton(onPressed:()async{try{await supabase.from('profiles').update({'full_name':name.text.trim(),'phone':phone.text.trim()}).eq('id',supabase.auth.currentUser!.id);if(ctx.mounted)Navigator.pop(ctx);reload();}catch(e){if(ctx.mounted)ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content:Text('فشل الحفظ: $e')));}},child:const Text('حفظ'))]));name.dispose();phone.dispose();
   }
   Future<void> changePassword()async{final password=TextEditingController(),confirm=TextEditingController();await showDialog(context:context,builder:(ctx)=>AlertDialog(title:const Text('تغيير كلمة المرور'),content:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:password,obscureText:true,decoration:const InputDecoration(labelText:'كلمة المرور الجديدة')),TextField(controller:confirm,obscureText:true,decoration:const InputDecoration(labelText:'تأكيد كلمة المرور'))]),actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إلغاء')),FilledButton(onPressed:()async{if(password.text.length<8||password.text!=confirm.text){ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content:Text('تأكد من تطابق كلمتي المرور وأن تكون 8 أحرف على الأقل')));return;}try{await supabase.auth.updateUser(UserAttributes(password:password.text));if(ctx.mounted)Navigator.pop(ctx);if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('تم تغيير كلمة المرور')));}catch(e){if(ctx.mounted)ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content:Text('$e')));}},child:const Text('تحديث'))]));password.dispose();confirm.dispose();}
-  @override Widget build(BuildContext c)=>FutureBuilder<Map<String,dynamic>>(future:future,builder:(c,s){if(!s.hasData)return s.hasError?Center(child:Text('تعذر تحميل الحساب: ${s.error}')):const Center(child:CircularProgressIndicator());final p=s.data!;String related(String key)=>p[key] is Map?'${p[key]['name_ar']??p[key]['name']??''}':'';return ListView(padding:const EdgeInsets.all(16),children:[const CircleAvatar(radius:38,child:Icon(Icons.person,size:42)),const SizedBox(height:12),Center(child:Text('${p['full_name']??'طالب AcadMind'}',style:const TextStyle(fontSize:22,fontWeight:FontWeight.bold))),Center(child:Text('${p['email']??''}',style:const TextStyle(color:Colors.black54))),const SizedBox(height:18),Card(child:Column(children:[ListTile(leading:const Icon(Icons.phone),title:const Text('رقم الهاتف'),subtitle:Text('${p['phone']??'غير مضاف'}')),ListTile(leading:const Icon(Icons.school),title:const Text('السنة الدراسية'),subtitle:Text(related('academic_years').isEmpty?'لم يتم التعيين':related('academic_years'))),ListTile(leading:const Icon(Icons.groups),title:const Text('المجموعة والشعبة'),subtitle:Text('${related('groups')} ${related('sections')}')),ListTile(leading:const Icon(Icons.verified_user),title:const Text('نوع الحساب وحالته'),subtitle:Text('${p['role']} • ${p['status']}'))])),const SizedBox(height:10),FilledButton.icon(onPressed:()=>edit(p),icon:const Icon(Icons.edit),label:const Text('تعديل بياناتي')),Card(child:Column(children:[ListTile(leading:const Icon(Icons.info_outline_rounded),title:const Text('حول التطبيق'),subtitle:const Text('تعرف على AcadMind وفريق التطوير'),trailing:const Icon(Icons.chevron_left_rounded),onTap:()=>Navigator.push(c,MaterialPageRoute(builder:(_)=>const AboutScreen())))])),Card(child:Column(children:[ListTile(title:const Text('المظهر'),leading:const Icon(Icons.dark_mode_outlined),trailing:DropdownButton<ThemeMode>(value:appThemeMode.value,items:const [DropdownMenuItem(value:ThemeMode.system,child:Text('حسب الجهاز')),DropdownMenuItem(value:ThemeMode.light,child:Text('فاتح')),DropdownMenuItem(value:ThemeMode.dark,child:Text('داكن'))],onChanged:(v){if(v!=null)saveThemeMode(v);})),const ListTile(title:Text('اللغة'),leading:Icon(Icons.language),subtitle:Text('الواجهة العربية متاحة حالياً'))])),OutlinedButton.icon(onPressed:()=>Navigator.push(c,MaterialPageRoute(builder:(_)=>const FeedbackScreen())),icon:const Icon(Icons.feedback_outlined),label:const Text('اقتراح أو الإبلاغ عن مشكلة')),OutlinedButton.icon(onPressed:changePassword,icon:const Icon(Icons.lock_reset),label:const Text('تغيير كلمة المرور')),OutlinedButton.icon(onPressed:()async{await supabase.auth.signOut();},icon:const Icon(Icons.logout),label:const Text('تسجيل الخروج'))]);});
+  @override Widget build(BuildContext c)=>FutureBuilder<Map<String,dynamic>>(future:future,builder:(c,s){if(!s.hasData)return s.hasError?Center(child:Text('تعذر تحميل الحساب: ${s.error}')):const Center(child:CircularProgressIndicator());final p=s.data!;String related(String key)=>p[key] is Map?'${p[key]['name_ar']??p[key]['name']??''}':'';return ListView(padding:const EdgeInsets.all(16),children:[const CircleAvatar(radius:38,child:Icon(Icons.person,size:42)),const SizedBox(height:12),Center(child:Text('${p['full_name']??'طالب AcadMind'}',style:const TextStyle(fontSize:22,fontWeight:FontWeight.bold))),Center(child:Text('${p['email']??''}',style:const TextStyle(color:Colors.black54))),const SizedBox(height:18),Card(child:Column(children:[ListTile(leading:const Icon(Icons.phone),title:const Text('رقم الهاتف'),subtitle:Text('${p['phone']??'غير مضاف'}')),ListTile(leading:const Icon(Icons.school),title:const Text('السنة الدراسية'),subtitle:Text(related('academic_years').isEmpty?'لم يتم التعيين':related('academic_years'))),ListTile(leading:const Icon(Icons.groups),title:const Text('المجموعة والسكشن'),subtitle:Text((related('groups') + ' • ' + related('sections')).trim()),trailing:const Icon(Icons.edit_outlined),onTap:()async{final changed=await Navigator.push<bool>(c,MaterialPageRoute(builder:(_)=>const StudentSetupScreen(forceEdit:true)));if(changed==true)reload();}),ListTile(leading:const Icon(Icons.verified_user),title:const Text('نوع الحساب وحالته'),subtitle:Text('${p['role']} • ${p['status']}'))])),const SizedBox(height:10),FilledButton.icon(onPressed:()=>edit(p),icon:const Icon(Icons.edit),label:const Text('تعديل بياناتي')),Card(child:Column(children:[ListTile(leading:const Icon(Icons.info_outline_rounded),title:const Text('حول التطبيق'),subtitle:const Text('تعرف على AcadMind وفريق التطوير'),trailing:const Icon(Icons.chevron_left_rounded),onTap:()=>Navigator.push(c,MaterialPageRoute(builder:(_)=>const AboutScreen())))])),Card(child:Column(children:[ListTile(title:const Text('المظهر'),leading:const Icon(Icons.dark_mode_outlined),trailing:DropdownButton<ThemeMode>(value:appThemeMode.value,items:const [DropdownMenuItem(value:ThemeMode.system,child:Text('حسب الجهاز')),DropdownMenuItem(value:ThemeMode.light,child:Text('فاتح')),DropdownMenuItem(value:ThemeMode.dark,child:Text('داكن'))],onChanged:(v){if(v!=null)saveThemeMode(v);})),const ListTile(title:Text('اللغة'),leading:Icon(Icons.language),subtitle:Text('الواجهة العربية متاحة حالياً'))])),OutlinedButton.icon(onPressed:()=>Navigator.push(c,MaterialPageRoute(builder:(_)=>const FeedbackScreen())),icon:const Icon(Icons.feedback_outlined),label:const Text('اقتراح أو الإبلاغ عن مشكلة')),OutlinedButton.icon(onPressed:changePassword,icon:const Icon(Icons.lock_reset),label:const Text('تغيير كلمة المرور')),OutlinedButton.icon(onPressed:()async{await supabase.auth.signOut();},icon:const Icon(Icons.logout),label:const Text('تسجيل الخروج'))]);});
 }
 
 class OwnerPage extends StatelessWidget { const OwnerPage({super.key}); @override Widget build(BuildContext context) => const OwnerConsole(); }
