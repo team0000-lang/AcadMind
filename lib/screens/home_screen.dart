@@ -703,7 +703,11 @@ class _ScheduleMeta extends StatelessWidget {
   Widget build(BuildContext context) => Row(mainAxisSize: MainAxisSize.min, children: [
     Icon(icon, size: 13, color: Theme.of(context).colorScheme.onSurfaceVariant),
     const SizedBox(width: 4),
-    Flexible(child: Text(value, style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant))),
+    ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 185),
+      child: Text(value, maxLines: 1, overflow: TextOverflow.ellipsis,
+        style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+    ),
   ]);
 }
 
