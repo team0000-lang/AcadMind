@@ -7,6 +7,7 @@ import '../services.dart';
 import '../notification_service.dart';
 import '../update_service.dart';
 import 'owner_console.dart';
+import 'study_tools.dart';
 import '../app_preferences.dart';
 
 class HomeScreen extends StatefulWidget { const HomeScreen({super.key}); @override State<HomeScreen> createState()=>_HomeScreenState(); }
@@ -24,6 +25,7 @@ class _HomeScreenState extends State<HomeScreen> {
      const AnnouncementsPage(),
      const AiPage(),
      const ProfilePage(),
+     const StudyToolsPage(),
      if (owner) const OwnerPage(),
    ];
    final items = <_HomeNavItem>[
@@ -43,7 +45,7 @@ class _HomeScreenState extends State<HomeScreen> {
      floatingActionButton: owner
          ? FloatingActionButton.small(
              heroTag: 'owner',
-             onPressed: () => setState(() => tab = 6),
+             onPressed: () => setState(() => tab = 7),
              backgroundColor: Theme.of(context).colorScheme.primary,
              foregroundColor: Colors.white,
              elevation: 4,
@@ -203,6 +205,7 @@ class DashboardPage extends StatelessWidget {
             _QuickTile(icon: Icons.calendar_month_rounded, title: 'جدول المحاضرات', subtitle: 'مواعيدك الأسبوعية', tint: const Color(0xFF1D9A91), onTap: () => onNavigate(2)),
             _QuickTile(icon: Icons.campaign_rounded, title: 'الإعلانات', subtitle: 'آخر أخبار الكلية', tint: const Color(0xFFE18B42), onTap: () => onNavigate(3)),
             _QuickTile(icon: Icons.auto_awesome_rounded, title: 'المساعد الذكي', subtitle: 'اسأل وذاكر بذكاء', tint: const Color(0xFF8B62D9), onTap: () => onNavigate(4)),
+            _QuickTile(icon: Icons.widgets_rounded, title: 'أدوات الدراسة الذكية', subtitle: '8 أدوات تساعدك تتعلم', tint: const Color(0xFFDB6A9B), onTap: () => onNavigate(6)),
           ],
         ),
         const SizedBox(height: 25),
