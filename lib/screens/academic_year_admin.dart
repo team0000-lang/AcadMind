@@ -40,6 +40,128 @@ class _AcademicYearsAdminState extends State<AcademicYearsAdmin> {
     widget.onChanged();
   }
 
+
+  Future<void> addGroup(Map<String, dynamic> year, List<Map<String, dynamic>> existing) async {
+    final used = existing.map((g) => g['code'].toString()).toSet();
+    final missing = ['G1', 'G2'].where((code) => !used.contains(code)).toList();
+    if (missing.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تمت إضافة G1 و G2 بالفعل لهذه الفرقة.')));
+      return;
+    }
+    String code = missing.first;
+    final name = TextEditingController(text: code == 'G1' ? 'Group 1' : 'Group 2');
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setD) => AlertDialog(
+        title: const Text('إضافة مجموعة دراسية'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          DropdownButtonFormField<String>(
+            value: code,
+            decoration: const InputDecoration(labelText: 'Group code'),
+            items: missing.map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
+            onChanged: (v) => setD(() {
+              code = v ?? code;
+              name.text = code == 'G1' ? 'Group 1' : 'Group 2';
+            }),
+          ),
+          TextField(controller: name, decoration: const InputDecoration(labelText: 'Group name')),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+          FilledButton(onPressed: () async {
+            if (name.text.trim().isEmpty) return;
+            try {
+              await supabase.from('groups').insert({
+                'academic_year_id': year['id'],
+                'name': name.text.trim(),
+                'code': code,
+                'display_order': code == 'G1' ? 1 : 2,
+                'is_active': true,
+              });
+              if (ctx.mounted) Navigator.pop(ctx);
+              reload();
+            } catch (e) {
+              if (ctx.mounted) ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text('تعذر إضافة المجموعة: ' + e.toString())));
+            }
+          }, child: const Text('إضافة المجموعة')),
+        ],
+      )),
+    );
+    name.dispose();
+  }
+
+  Future<void> addSection(Map<String, dynamic> group, List<Map<String, dynamic>> existing) async {
+    final allowed = group['code'] == 'G1'
+        ? <int>[1, 3, 5]
+        : group['code'] == 'G2' ? <int>[2, 4, 6] : <int>[1, 2, 3, 4, 5, 6];
+    final used = existing.map((s) {
+      final digits = s['code'].toString().replaceAll(RegExp(r'[^0-9]'), '');
+      return int.tryParse(digits);
+    }).whereType<int>().toSet();
+    final missing = allowed.where((n) => !used.contains(n)).toList();
+    if (missing.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('كل السكاشن المسموح بها مضافة بالفعل.')));
+      return;
+    }
+    int selected = missing.first;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setD) => AlertDialog(
+        title: const Text('إضافة سكشن'),
+        content: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: missing.map((n) => ChoiceChip(
+            label: Text('Sec ' + n.toString()),
+            selected: selected == n,
+            onSelected: (v) { if (v) setD(() => selected = n); },
+          )).toList(),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+          FilledButton(onPressed: () async {
+            try {
+              await supabase.from('sections').insert({
+                'academic_year_id': group['academic_year_id'],
+                'group_id': group['id'],
+                'name': 'Section ' + selected.toString(),
+                'code': 'Sec ' + selected.toString(),
+                'display_order': selected,
+                'is_active': true,
+              });
+              if (ctx.mounted) Navigator.pop(ctx);
+              reload();
+            } catch (e) {
+              if (ctx.mounted) ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text('تعذر إضافة السكشن: ' + e.toString())));
+            }
+          }, child: const Text('إضافة السكشن')),
+        ],
+      )),
+    );
+  }
+
+  Future<void> changeYearStatus(
+    Map<String, dynamic> year,
+    String status,
+    List<Map<String, dynamic>> yearGroups,
+    List<Map<String, dynamic>> allSections,
+  ) async {
+    if (status == 'active') {
+      final enabledGroups = yearGroups.where((g) => g['is_active'] == true).toList();
+      if (enabledGroups.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('أضف وفعّل مجموعة واحدة على الأقل قبل فتح الفرقة.')));
+        return;
+      }
+      final ids = enabledGroups.map((g) => g['id'].toString()).toSet();
+      final hasSection = allSections.any((s) => ids.contains(s['group_id'].toString()) && s['is_active'] == true);
+      if (!hasSection) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('فعّل سكشنًا واحدًا على الأقل قبل فتح الفرقة للطلاب.')));
+        return;
+      }
+    }
+    await updateRow('academic_years', year['id'].toString(), 'status', status);
+  }
+
   Future<void> updateRow(String table, String id, String field, dynamic value) async {
     try {
       setState(() => busy = true);
@@ -97,9 +219,14 @@ class _AcademicYearsAdminState extends State<AcademicYearsAdmin> {
                       DropdownMenuItem(value: 'coming_soon', child: Text('قريباً')),
                       DropdownMenuItem(value: 'disabled', child: Text('مغلقة')),
                     ],
-                    onChanged: busy ? null : (v) { if (v != null && v != status) updateRow('academic_years', id, 'status', v); },
+                    onChanged: busy ? null : (v) { if (v != null && v != status) changeYearStatus(year, v, yearGroups, sections); },
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
+                  Align(alignment: Alignment.centerRight, child: OutlinedButton.icon(
+                    onPressed: busy ? null : () => addGroup(year, yearGroups),
+                    icon: const Icon(Icons.group_add_outlined, size: 17),
+                    label: const Text('إضافة مجموعة'),
+                  )),
                   const Align(alignment: Alignment.centerRight, child: Text('المجموعات', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12))),
                   ...yearGroups.map((g) {
                     final groupSections = sections.where((s) => s['group_id'].toString() == g['id'].toString()).toList();
@@ -113,6 +240,14 @@ class _AcademicYearsAdminState extends State<AcademicYearsAdmin> {
                           title: Text(g['code'].toString() + ' • ' + g['name'].toString(), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
                           subtitle: Text(groupSections.where((s) => s['is_active'] == true).length.toString() + ' سكاشن مفعلة', style: const TextStyle(fontSize: 10)),
                         ),
+                        Align(alignment: Alignment.centerRight, child: Padding(
+                          padding: const EdgeInsetsDirectional.only(end: 10),
+                          child: TextButton.icon(
+                            onPressed: busy ? null : () => addSection(g, groupSections),
+                            icon: const Icon(Icons.add, size: 15),
+                            label: const Text('إضافة سكشن', style: TextStyle(fontSize: 10)),
+                          ),
+                        )),
                         if (groupSections.isNotEmpty) Padding(
                           padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
                           child: Wrap(spacing: 7, runSpacing: 5, children: groupSections.map((s) {
