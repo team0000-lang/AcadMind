@@ -7,7 +7,7 @@ final ValueNotifier<int> profileScopeRevision = ValueNotifier<int>(0);
 class AcadMindData {
   static Future<Map<String, dynamic>> profile() async {
     final id = supabase.auth.currentUser!.id;
-    return await supabase.from('profiles').select('*, academic_years(name_ar,name_en), groups(name), sections(name)').eq('id', id).single();
+    return await supabase.from('profiles').select('*, academic_years(name_ar,name_en), groups(name,code), sections(name)').eq('id', id).single();
   }
   static Future<List<Map<String, dynamic>>> subjects() async => List<Map<String,dynamic>>.from(await supabase.from('subjects').select('id,name_ar,name_en,description,code,icon_path').eq('is_active', true).isFilter('deleted_at', null).order('display_order'));
   static Future<List<Map<String, dynamic>>> announcements() async => List<Map<String,dynamic>>.from(await supabase.from('announcements').select('id,title,content,priority,published_at').eq('is_active', true).isFilter('deleted_at', null).order('published_at', ascending: false).limit(30));
