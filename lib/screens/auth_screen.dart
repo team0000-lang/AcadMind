@@ -42,19 +42,25 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
     setState(() => busy = true);
     try {
       if (register) {
-        await supabase.auth.signUp(
+        final response = await supabase.auth.signUp(
           email: email.text.trim(),
           password: password.text,
           data: {'full_name': fullName.text.trim()},
         );
-        msg('تم إنشاء الحساب. لو تأكيد البريد مفعّل، افتح رسالة التحقق ثم سجّل الدخول.');
+        if (response.session != null && mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const HomeScreen()),
+          );
+          return;
+        }
+        msg('تم إنشاء الحساب. سجّل الدخول للمتابعة.');
       } else {
         final response = await supabase.auth.signInWithPassword(
           email: email.text.trim(),
           password: password.text,
         );
         if (response.session == null) {
-          msg('تم تسجيل الدخول لكن لم تُنشأ جلسة. تأكد من تأكيد البريد الإلكتروني ثم حاول مرة أخرى.');
+          msg('لم تُنشأ جلسة. تأكد من بيانات الدخول وحاول مرة أخرى.');
           return;
         }
         if (mounted) {
@@ -66,7 +72,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
     } on AuthException catch (e) {
       final message = e.message.toLowerCase();
       if (message.contains('email not confirmed') || message.contains('email_not_confirmed')) {
-        msg('البريد الإلكتروني غير مؤكد. افتح رسالة التأكيد ثم سجّل الدخول.');
+        msg('تعذر تسجيل الدخول. تأكد من البريد الإلكتروني وكلمة المرور.');
       } else if (message.contains('invalid login credentials')) {
         msg('البريد الإلكتروني أو كلمة المرور غير صحيحة.');
       } else {
@@ -83,7 +89,16 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
     if (busy) return;
     setState(() => busy = true);
     try {
-      await supabase.auth.signInAnonymously();
+      final response = await supabase.auth.signInAnonymously();
+      if (response.session == null) {
+        msg('لم يتم إنشاء جلسة للضيف. فعّل Anonymous Sign-ins في Supabase.');
+        return;
+      }
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+        );
+      }
     } on AuthException catch (e) {
       final detail = e.message.toLowerCase();
       if (detail.contains('anonymous') || detail.contains('disabled') || detail.contains('not enabled')) {
