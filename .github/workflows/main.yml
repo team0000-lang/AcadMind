@@ -1,65 +1,59 @@
-name: Build AcadMind APK
-
+name: Build AcadMind Flutter APK
 on:
   workflow_dispatch:
   push:
-    branches: [main]
-
+    branches: [main, master]
+    paths:
+      - '**'
 permissions:
   contents: read
-
 jobs:
-  build-apk:
+  build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Java 17
-        uses: actions/setup-java@v4
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9.15.9
-          run_install: false
-
-      - name: Verify environment
+      - name: Generate Android runner
+        run: flutter create --platforms=android --org com.acadmind --project-name acadmind .
+      - name: Keep AcadMind Android application ID
         run: |
-          node --version
-          pnpm --version
-          java -version
-
+          python3 - <<'PY'
+          from pathlib import Path
+          root = Path('android/app')
+          for p in root.rglob('build.gradle*'):
+              t = p.read_text()
+              t = t.replace('com.acadmind.acadmind', 'com.acadmind.app')
+              p.write_text(t)
+          manifest = root / 'src/main/AndroidManifest.xml'
+          if manifest.exists():
+              t = manifest.read_text().replace('android:label=\"acadmind\"', 'android:label=\"AcadMind\"')
+              t = t.replace('<application', '<uses-permission android:name=\"android.permission.POST_NOTIFICATIONS\" />\n    <application', 1)
+              manifest.write_text(t)
+          for p in root.rglob('MainActivity.kt'):
+              t = p.read_text().replace('package com.acadmind.acadmind', 'package com.acadmind.app')
+              target = root / 'src/main/kotlin/com/acadmind/app/MainActivity.kt'
+              target.parent.mkdir(parents=True, exist_ok=True)
+              target.write_text(t)
+              p.unlink()
+          PY
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build web assets
-        run: pnpm build
-
-      - name: Sync Capacitor Android
-        run: pnpm exec cap sync android
-
-      - name: Make Gradle wrapper executable
-        run: chmod +x android/gradlew
-
-      - name: Build debug APK
-        working-directory: android
-        run: ./gradlew assembleDebug --no-daemon
-
-      - name: Upload APK artifact
+        run: flutter pub get
+      - name: Analyze Dart code
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+      - name: Build APK
+        run: flutter build apk --debug --no-pub
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: acadmind-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
           if-no-files-found: error
-          retention-days: 14
+
 
