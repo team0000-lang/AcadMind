@@ -205,7 +205,7 @@ class _SplashGateState extends State<SplashGate> with TickerProviderStateMixin {
                                   animation: _typing,
                                   builder: (context, _) {
                                     const name = 'AcadMind';
-                                    final count = (_typing.value * name.length).ceil().clamp(0, name.length);
+                                    final count = (_typing.value * name.length).ceil().clamp(0, name.length).toInt();
                                     return Text(
                                       name.substring(0, count),
                                       textAlign: TextAlign.center,
