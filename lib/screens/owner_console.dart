@@ -173,23 +173,76 @@ Future<void> _addLecture(Map s)=>_simpleForm('إضافة محاضرة', [
     });
   }
 });
-Future<void> _addYoutube(Map s)=>_simpleForm('إضافة فيديو للمادة', [
-  ('عنوان الفيديو','text'),
-  ('رابط YouTube','url'),
-  ('القناة (اختياري)','text'),
-  ('الوصف (اختياري)','text'),
-],(v)async{
-  if(v[0].isEmpty) throw Exception('عنوان الفيديو مطلوب');
-  if(!_validYoutubeUrl(v[1])) throw Exception('رابط YouTube غير صحيح. استخدم https://youtube.com أو https://youtu.be');
-  await supabase.from('youtube_resources').insert({
-    'subject_id':s['id'],
-    'title':v[0],
-    'youtube_url':v[1],
-    'channel':v[2].isEmpty?null:v[2],
-    'description':v[3].isEmpty?null:v[3],
-    'is_active':true,
-  });
-});
+Future<void> _addYoutube(Map s) async {
+  final title = TextEditingController();
+  final url = TextEditingController();
+  final channel = TextEditingController();
+  final description = TextEditingController();
+  final lectures = List<Map<String,dynamic>>.from(
+    await supabase.from('lectures').select('id,title')
+      .eq('subject_id',s['id']).eq('is_active',true)
+      .isFilter('deleted_at',null).order('display_order'),
+  );
+  String? lectureId;
+  if(!mounted)return;
+  await showDialog(context:context,builder:(ctx)=>StatefulBuilder(builder:(ctx,setD)=>AlertDialog(
+    title:const Text('إضافة فيديو شرح'),
+    content:SizedBox(width:440,height:MediaQuery.sizeOf(ctx).height*.62,
+      child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
+        TextField(controller:title,decoration:const InputDecoration(labelText:'عنوان الفيديو')),
+        const SizedBox(height:10),
+        TextField(controller:url,keyboardType:TextInputType.url,textDirection:TextDirection.ltr,
+          decoration:const InputDecoration(labelText:'رابط YouTube',prefixIcon:Icon(Icons.link_rounded))),
+        const SizedBox(height:10),
+        DropdownButtonFormField<String>(
+          value:lectureId,isExpanded:true,
+          decoration:const InputDecoration(labelText:'اربط الفيديو بمحاضرة (اختياري)'),
+          items:[
+            const DropdownMenuItem<String>(value:null,child:Text('فيديو عام للمادة')),
+            ...lectures.map((item)=>DropdownMenuItem<String>(
+              value:item['id'].toString(),child:Text(item['title'].toString(),overflow:TextOverflow.ellipsis),
+            )),
+          ],
+          onChanged:(value)=>setD(()=>lectureId=value),
+        ),
+        const SizedBox(height:10),
+        TextField(controller:channel,decoration:const InputDecoration(labelText:'القناة (اختياري)')),
+        const SizedBox(height:10),
+        TextField(controller:description,minLines:2,maxLines:3,
+          decoration:const InputDecoration(labelText:'الوصف (اختياري)')),
+      ])),
+    ),
+    actions:[
+      TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إلغاء')),
+      FilledButton(onPressed:()async{
+        if(title.text.trim().isEmpty){
+          ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content:Text('عنوان الفيديو مطلوب')));
+          return;
+        }
+        if(!_validYoutubeUrl(url.text)){
+          ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content:Text('رابط YouTube غير صحيح. استخدم رابطًا يبدأ بـ https://')));
+          return;
+        }
+        try{
+          await supabase.from('youtube_resources').insert({
+            'subject_id':s['id'],
+            'lecture_id':lectureId,
+            'title':title.text.trim(),
+            'youtube_url':url.text.trim(),
+            'channel':channel.text.trim().isEmpty?null:channel.text.trim(),
+            'description':description.text.trim().isEmpty?null:description.text.trim(),
+            'is_active':true,
+          });
+          if(ctx.mounted)Navigator.pop(ctx);
+          reload();
+        }catch(error){
+          if(ctx.mounted)ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content:Text('تعذر حفظ الفيديو: $error')));
+        }
+      },child:const Text('حفظ الفيديو')),
+    ],
+  )));
+  title.dispose();url.dispose();channel.dispose();description.dispose();
+}
 Future<void> _addDrive(Map s)async{
   await _simpleForm('إضافة رابط ملفات المادة', [
     ('اسم الملف أو المجلد','text'),
