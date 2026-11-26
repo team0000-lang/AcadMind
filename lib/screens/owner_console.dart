@@ -133,7 +133,7 @@ Future<void> _scheduleForm(BuildContext context,VoidCallback done,{Map<String,dy
         try{
           final time=RegExp(r'^([01]\\d|2[0-3]):[0-5]\\d$');
           if(subject==null)throw Exception('اختر المادة');
-          if(!time.hasMatch(start.text.trim())||!time.hasMatch(end.text.trim())||start.text.trim()>=end.text.trim())throw Exception('تأكد من صحة وقت البداية والنهاية');
+          if(!time.hasMatch(start.text.trim())||!time.hasMatch(end.text.trim()))throw Exception('اكتب الوقت بصيغة HH:MM صحيحة');final startParts=start.text.trim().split(':').map(int.parse).toList();final endParts=end.text.trim().split(':').map(int.parse).toList();final startMinutes=startParts[0]*60+startParts[1];final endMinutes=endParts[0]*60+endParts[1];if(endMinutes<=startMinutes)throw Exception('وقت النهاية لازم يكون بعد وقت البداية');
           final payload={'academic_year_id':year,'subject_id':subject,'day_of_week':day,'class_type':type,'starts_at':start.text.trim(),'ends_at':end.text.trim(),'location':place.text.trim(),'instructor':teacher.text.trim(),'group_id':group,'section_id':section,'is_active':true};
           if(row==null){await supabase.from('schedules').insert(payload);}else{await supabase.from('schedules').update(payload).eq('id',row['id']);}
           if(ctx.mounted)Navigator.pop(ctx);done();
