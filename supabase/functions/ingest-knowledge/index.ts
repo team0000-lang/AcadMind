@@ -41,12 +41,40 @@ async function extractText(file: Blob, mimeType: string, path: string) {
   throw new Error("Only PDF, TXT, and DOCX documents are supported");
 }
 
+async function embedBatch(texts: string[]) {
+  const key = env("GEMINI_API_KEY");
+  if (!key) throw new Error("GEMINI_API_KEY is not configured");
+  const requests = texts.map((text) => ({
+    model: "models/gemini-embedding-2",
+    content: { parts: [{ text }] },
+    taskType: "RETRIEVAL_DOCUMENT",
+    outputDimensionality: 1536,
+  }));
+  const res = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2:batchEmbedContents", {
+    method: "POST",
+    headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
+    body: JSON.stringify({ requests }),
+  });
+  if (!res.ok) {
+    const detail = await res.text();
+    console.error("Gemini batch embedding error", res.status, detail.slice(0, 500));
+    throw new Error(`Gemini embedding API returned ${res.status}`);
+  }
+  const embeddings = (await res.json())?.embeddings;
+  if (!Array.isArray(embeddings) || embeddings.length !== texts.length) throw new Error("Gemini returned an invalid embedding batch");
+  return embeddings.map((item: Record<string, unknown>) => {
+    const vector = (item.embedding as Record<string, unknown> | undefined)?.values;
+    if (!Array.isArray(vector) || vector.length !== 1536) throw new Error("Expected 1536-dimensional Gemini embeddings");
+    return vector;
+  });
+}
+
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers });
   if (request.method !== "POST") return response({ error: "Method not allowed" }, 405);
-  const auth = request.headers.get("Authorization"); const url = env("SUPABASE_URL"); const anon = env("SUPABASE_ANON_KEY"); const apiKey = env("OPENAI_API_KEY");
+  const auth = request.headers.get("Authorization"); const url = env("SUPABASE_URL"); const anon = env("SUPABASE_ANON_KEY");
   if (!auth?.startsWith("Bearer ") || !url || !anon) return response({ error: "Authentication required" }, 401);
-  if (!apiKey) return response({ error: "AI provider secret is not configured" }, 503);
+  if (!env("GEMINI_API_KEY")) return response({ error: "Gemini provider secret is not configured" }, 503);
   const client = createClient(url, anon, { global: { headers: { Authorization: auth } }, auth: { persistSession: false, autoRefreshToken: false } });
   const { data: { user }, error: authError } = await client.auth.getUser();
   if (authError || !user) return response({ error: "Invalid session" }, 401);
@@ -78,22 +106,29 @@ Deno.serve(async (request) => {
     if (chunks.length === 800 && cleaned.length > size * 800) throw new Error("Document exceeds the 800-chunk processing limit");
     await client.from("knowledge_documents").update({ status: "processing" }).eq("id", doc.id);
     const records: Array<Record<string, unknown>> = [];
-    for (let i = 0; i < chunks.length; i += 64) {
-      const batch = chunks.slice(i, i + 64);
-      const emb = await fetch(`${(env("OPENAI_BASE_URL") || "https://api.openai.com/v1").replace(/\/$/, "")}/embeddings`, { method: "POST", headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" }, body: JSON.stringify({ model: env("OPENAI_EMBEDDING_MODEL") || "text-embedding-3-small", input: batch.map((chunk) => chunk.content) }) });
-      if (!emb.ok) throw new Error(`Embedding API error ${emb.status}`);
-      const vectors = (await emb.json())?.data;
-      if (!Array.isArray(vectors) || vectors.length !== batch.length) throw new Error("Embedding API returned invalid batch");
-      batch.forEach((chunk, j) => { const vector = vectors[j]?.embedding; if (!Array.isArray(vector) || vector.length !== 1536) throw new Error("Expected 1536-dimension vectors"); records.push({ document_id: doc.id, subject_id: doc.subject_id, lecture_id: doc.lecture_id, chunk_index: chunk.index, page_number: chunk.page_number, content: chunk.content, embedding: JSON.stringify(vector) }); });
+    for (let i = 0; i < chunks.length; i += 32) {
+      const batch = chunks.slice(i, i + 32);
+      const vectors = await embedBatch(batch.map((chunk) => chunk.content));
+      batch.forEach((chunk, j) => records.push({
+        document_id: doc.id, subject_id: doc.subject_id, lecture_id: doc.lecture_id,
+        chunk_index: chunk.index, page_number: chunk.page_number, content: chunk.content,
+        embedding: JSON.stringify(vectors[j]),
+      }));
     }
     await client.from("knowledge_chunks").delete().eq("document_id", doc.id);
-    for (let i = 0; i < records.length; i += 100) { const { error } = await client.from("knowledge_chunks").insert(records.slice(i, i + 100)); if (error) throw new Error("Unable to save knowledge chunks"); }
-    const { error: finishError } = await client.from("knowledge_documents").update({ status: "ready", page_count: extracted.pageCount, metadata: { chunk_count: chunks.length, extracted_at: new Date().toISOString() } }).eq("id", doc.id);
+    for (let i = 0; i < records.length; i += 100) {
+      const { error } = await client.from("knowledge_chunks").insert(records.slice(i, i + 100));
+      if (error) throw new Error("Unable to save knowledge chunks");
+    }
+    const { error: finishError } = await client.from("knowledge_documents").update({
+      status: "ready", page_count: extracted.pageCount,
+      metadata: { chunk_count: chunks.length, extracted_at: new Date().toISOString(), embedding_model: "gemini-embedding-2", embedding_dimensions: 1536 },
+    }).eq("id", doc.id);
     if (finishError) throw new Error("Unable to mark document ready");
-    return response({ documentId: doc.id, chunks: chunks.length, pageCount: extracted.pageCount, status: "ready" });
+    return response({ documentId: doc.id, chunks: chunks.length, pageCount: extracted.pageCount, status: "ready", provider: "Gemini" });
   } catch (error) {
     await client.from("knowledge_documents").update({ status: "failed" }).eq("id", doc.id);
     console.error("ingest-knowledge failed", error instanceof Error ? error.message : "unknown error");
-    return response({ error: "Document ingestion failed" }, 502);
+    return response({ error: "Document ingestion failed. Check Gemini API access and try again." }, 502);
   }
 });
