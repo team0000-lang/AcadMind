@@ -15,8 +15,116 @@ class _HomeScreenState extends State<HomeScreen> {
  @override void initState(){super.initState();_loadRole();WidgetsBinding.instance.addPostFrameCallback((_)=>UpdateService.check(context));}
  Future<void> _loadRole() async {try{final v=await AcadMindData.isOwner();if(mounted)setState(()=>owner=v);}catch(_) {}}
  Future<void> refresh() async {setState((){});_loadRole();}
- @override Widget build(BuildContext context){final pages=[DashboardPage(onNavigate:(v)=>setState(()=>tab=v)),const SubjectsPage(),const SchedulePage(),const AnnouncementsPage(),const AiPage(),const ProfilePage(),if(owner)const OwnerPage()];final destinations=<NavigationDestination>[const NavigationDestination(icon:Icon(Icons.home_outlined),selectedIcon:Icon(Icons.home),label:'الرئيسية'),const NavigationDestination(icon:Icon(Icons.menu_book_outlined),label:'المواد'),const NavigationDestination(icon:Icon(Icons.calendar_month_outlined),label:'الجدول'),const NavigationDestination(icon:Icon(Icons.campaign_outlined),label:'الإعلانات'),const NavigationDestination(icon:Icon(Icons.auto_awesome_outlined),label:'AcadMind AI'),const NavigationDestination(icon:Icon(Icons.person_outline),label:'حسابي'),if(owner)const NavigationDestination(icon:Icon(Icons.admin_panel_settings_outlined),label:'الإدارة')];return Scaffold(appBar:AppBar(title:const Text('AcadMind',style:TextStyle(fontWeight:FontWeight.w900)),actions:[IconButton(onPressed:refresh,icon:const Icon(Icons.refresh)),IconButton(onPressed:()async{await supabase.auth.signOut();},icon:const Icon(Icons.logout))]),body:pages[tab],bottomNavigationBar:NavigationBar(selectedIndex:tab,destinations:destinations,onDestinationSelected:(v)=>setState(()=>tab=v),labelBehavior:NavigationDestinationLabelBehavior.onlyShowSelected));}
-}
+ @override
+ Widget build(BuildContext context) {
+   final pages = [
+     DashboardPage(onNavigate: (v) => setState(() => tab = v)),
+     const SubjectsPage(),
+     const SchedulePage(),
+     const AnnouncementsPage(),
+     const AiPage(),
+     const ProfilePage(),
+     if (owner) const OwnerPage(),
+   ];
+   final items = <_HomeNavItem>[
+     _HomeNavItem(Icons.home_outlined, Icons.home_rounded, 'الرئيسية', 0),
+     _HomeNavItem(Icons.menu_book_outlined, Icons.menu_book_rounded, 'المواد', 1),
+     _HomeNavItem(Icons.calendar_month_outlined, Icons.calendar_month_rounded, 'الجدول', 2),
+     _HomeNavItem(Icons.auto_awesome_outlined, Icons.auto_awesome_rounded, 'AI', 4),
+     _HomeNavItem(Icons.person_outline_rounded, Icons.person_rounded, 'حسابي', 5),
+   ];
+   return Scaffold(
+     extendBody: true,
+     backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+     body: SafeArea(
+       bottom: false,
+       child: IndexedStack(index: tab, children: pages),
+     ),
+     floatingActionButton: owner
+         ? FloatingActionButton.small(
+             heroTag: 'owner',
+             onPressed: () => setState(() => tab = 6),
+             backgroundColor: Theme.of(context).colorScheme.primary,
+             foregroundColor: Colors.white,
+             elevation: 4,
+             child: const Icon(Icons.admin_panel_settings_rounded),
+           )
+         : null,
+     floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+     bottomNavigationBar: SafeArea(
+       top: false,
+       child: Padding(
+         padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+         child: Container(
+           height: 70,
+           decoration: BoxDecoration(
+             color: Theme.of(context).colorScheme.surface.withValues(alpha: .97),
+             borderRadius: BorderRadius.circular(25),
+             border: Border.all(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: .55)),
+             boxShadow: [
+               BoxShadow(
+                 color: Colors.black.withValues(alpha: .09),
+                 blurRadius: 28,
+                 offset: const Offset(0, 10),
+               ),
+             ],
+           ),
+           child: Row(
+             children: items.map((item) {
+               final selected = tab == item.index;
+               return Expanded(
+                 child: InkWell(
+                   borderRadius: BorderRadius.circular(20),
+                   onTap: () => setState(() => tab = item.index),
+                   child: AnimatedContainer(
+                     duration: const Duration(milliseconds: 220),
+                     margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 7),
+                     padding: const EdgeInsets.symmetric(horizontal: 4),
+                     decoration: BoxDecoration(
+                       color: selected
+                           ? Theme.of(context).colorScheme.primary.withValues(alpha: .11)
+                           : Colors.transparent,
+                       borderRadius: BorderRadius.circular(18),
+                     ),
+                     child: Column(
+                       mainAxisAlignment: MainAxisAlignment.center,
+                       children: [
+                         AnimatedSwitcher(
+                           duration: const Duration(milliseconds: 180),
+                           child: Icon(
+                             selected ? item.selectedIcon : item.icon,
+                             key: ValueKey(selected),
+                             size: selected ? 23 : 21,
+                             color: selected
+                                 ? Theme.of(context).colorScheme.primary
+                                 : Theme.of(context).colorScheme.onSurfaceVariant,
+                           ),
+                         ),
+                         const SizedBox(height: 3),
+                         Text(
+                           item.label,
+                           maxLines: 1,
+                           overflow: TextOverflow.ellipsis,
+                           style: TextStyle(
+                             fontSize: 10,
+                             fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
+                             color: selected
+                                 ? Theme.of(context).colorScheme.primary
+                                 : Theme.of(context).colorScheme.onSurfaceVariant,
+                           ),
+                         ),
+                       ],
+                     ),
+                   ),
+                 ),
+               );
+             }).toList(),
+           ),
+         ),
+       ),
+     ),
+   );
+ }
 
 class DashboardPage extends StatelessWidget {
   final ValueChanged<int> onNavigate;
@@ -570,3 +678,12 @@ class OwnerPage extends StatelessWidget { const OwnerPage({super.key}); @overrid
 class _AsyncList<T> extends StatelessWidget {final Future<List<T>> future;final String empty;final Widget Function(T) builder;const _AsyncList({required this.future,required this.empty,required this.builder});@override Widget build(BuildContext c)=>FutureBuilder<List<T>>(future:future,builder:(c,s){if(s.connectionState==ConnectionState.waiting)return const Center(child:CircularProgressIndicator());if(s.hasError)return _ErrorBox(message:'تعذر تحميل البيانات: ${s.error}');final list=s.data??[];if(list.isEmpty)return _EmptyBox(text:empty);return ListView.separated(padding:const EdgeInsets.all(12),itemCount:list.length,separatorBuilder:(_,__)=>const SizedBox(height:8),itemBuilder:(c,i)=>Card(child:builder(list[i])));});}
 class _EmptyBox extends StatelessWidget {final String text;const _EmptyBox({required this.text});@override Widget build(BuildContext c)=>Center(child:Padding(padding:const EdgeInsets.all(30),child:Text(text,textAlign:TextAlign.center,style:const TextStyle(color:Colors.black54))));}
 class _ErrorBox extends StatelessWidget {final String message;const _ErrorBox({required this.message});@override Widget build(BuildContext c)=>Center(child:Padding(padding:const EdgeInsets.all(20),child:Text(message,textAlign:TextAlign.center,style:TextStyle(color:Theme.of(c).colorScheme.error))));}
+
+
+class _HomeNavItem {
+  final IconData icon;
+  final IconData selectedIcon;
+  final String label;
+  final int index;
+  const _HomeNavItem(this.icon, this.selectedIcon, this.label, this.index);
+}
