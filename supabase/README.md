@@ -33,18 +33,18 @@ Email/password, phone OTP, session refresh/persistence, email verification and r
 
 ## AI and knowledge base secrets
 
-The functions read `OPENAI_API_KEY` only from Edge Function runtime secrets; optionally set `OPENAI_BASE_URL`, `OPENAI_CHAT_MODEL`, and `OPENAI_EMBEDDING_MODEL`. Do not place these in `.env`, Flutter, or the app bundle. From a trusted workstation with the Supabase CLI logged in, set the provider secret with:
+The functions read `GEMINI_API_KEY` only from Edge Function runtime secrets. Optional `GEMINI_CHAT_MODEL` can override the default `gemini-3.8-flash`. Do not place these in `.env`, Flutter, GitHub source, or the app bundle. Set the key in Supabase Dashboard → Edge Function Secrets, or from a trusted workstation with the Supabase CLI:
 
 ```sh
-supabase secrets set --project-ref skpjvgzxoholaapymvwd OPENAI_API_KEY='YOUR_PROVIDER_KEY'
+supabase secrets set --project-ref skpjvgzxoholaapymvwd GEMINI_API_KEY='YOUR_GEMINI_KEY'
 ```
 
-Optional model/base URL secrets may be set the same way. This environment has no secret-management operation exposed for Supabase Edge Functions, so provider secrets have intentionally not been copied into project code or transmitted. Until configured, AI endpoints return a safe configuration error.
+The chat function uses Gemini for responses and Gemini Embedding 2 with 1536 dimensions for retrieval. The ingestion function uses the same embedding model and dimension. Existing course chunks created with a different embedding provider/model must be re-ingested before semantic retrieval is reliable. Keep the secret server-side only.
 
 ## AI endpoints
 
-- `POST /functions/v1/ai-chat`: requires authenticated Supabase JWT; validates account, scope and input; charges an atomic daily quota (default 30/day); optionally embeds and retrieves up to six chunks for a supplied subject; calls provider; saves the user's own messages and sources. Send JSON `{ "question": "...", "subjectId": "<uuid>", "lectureId": "<uuid-or-null>", "conversationId": "<uuid-or-null>", "retrieve": true }`.
-- `POST /functions/v1/ingest-knowledge`: owner-only; takes `{ "documentId": "<uuid>" }`, downloads the private object, extracts PDF/TXT/DOCX text, cleans/chunks it, computes embeddings, stores source/page metadata and marks the document ready. Upload the file to `course-documents` and create its `knowledge_documents` row first. Scanned PDFs with no text layer require OCR before ingestion; the function rejects empty extraction and files exceeding 1 MB of extracted text / 800 chunks.
+- `POST /functions/v1/ai-chat`: requires authenticated Supabase JWT; validates account, scope and input; charges an atomic daily quota (default 30/day); optionally embeds and retrieves up to six chunks for a supplied subject; calls Gemini; saves the user's own messages and sources. Send JSON `{ "question": "...", "subjectId": "<uuid>", "lectureId": "<uuid-or-null>", "conversationId": "<uuid-or-null>", "retrieve": true, "task": "chat|explain|summarize|quiz|flashcards|planner|pdf|analytics" }`.
+- `POST /functions/v1/ingest-knowledge`: owner-only; takes `{ "documentId": "<uuid>" }`, downloads the private object, extracts PDF/TXT/DOCX text, cleans/chunks it, computes Gemini Embedding 2 vectors (1536 dimensions), stores source/page metadata and marks the document ready. Upload the file to `course-documents` and create its `knowledge_documents` row first. Scanned PDFs with no text layer require OCR before ingestion; the function rejects empty extraction and files exceeding 1 MB of extracted text / 800 chunks.
 
 Both functions require JWT verification. Retrieval only returns chunks visible under the signed-in user's RLS scope.
 
