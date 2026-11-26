@@ -789,7 +789,26 @@ class _SchedulePageState extends State<SchedulePage> {
               ],
             ),
           ),
-          const SizedBox(height: 9),
+          const SizedBox(height: 7),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFA726).withValues(alpha: .11),
+                borderRadius: BorderRadius.circular(13),
+                border: Border.all(color: const Color(0xFFFFA726).withValues(alpha: .25)),
+              ),
+              child: const Row(children: [
+                Icon(Icons.info_outline_rounded, color: Color(0xFFB87919), size: 16),
+                SizedBox(width: 8),
+                Expanded(child: Text('الجدول مضاف كتوقيت مبدئي؛ راجع الإدارة قبل الاعتماد النهائي.',
+                  style: TextStyle(color: Color(0xFF986318), fontWeight: FontWeight.w700, fontSize: 10))),
+              ]),
+            ),
+          ),
+          const SizedBox(height: 8),
           Expanded(
             child: rows.isEmpty
                 ? ListView(padding: const EdgeInsets.fromLTRB(18, 20, 18, 30), children: [
