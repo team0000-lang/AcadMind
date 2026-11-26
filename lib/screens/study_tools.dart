@@ -119,6 +119,11 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
   Future<void> generate()async{
     final value=controller.text.trim();
     if(value.isEmpty && !(widget.tool.title=='PDF Analyzer' && pdfFile!=null)){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('اكتب المحتوى أو اختر ملف PDF أولاً')));return;}
+    final session = supabase.auth.currentSession;
+    if(session == null){
+      setState(()=>answer='جلسة الدخول غير موجودة. سجّل الدخول مرة أخرى لاستخدام أدوات الذكاء الاصطناعي.');
+      return;
+    }
     setState(()=>busy=true);
     try{
       final task = switch (widget.tool.title) {
@@ -132,7 +137,9 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
         'Progress Analytics' => 'analytics',
         _ => 'chat',
       };
-      final result=await supabase.functions.invoke('ai-chat',body:{
+      final result=await supabase.functions.invoke('ai-chat',
+        headers:{'Authorization':'Bearer ${session.accessToken}'},
+        body:{
         'question':'${widget.tool.prompt}\n\nمدخلات الطالب:\n${value.isEmpty?'حلل الملف المرفق بالكامل واستخرج أهم النقاط والأسئلة.':value}',
         'task':task,
         'retrieve':false,
