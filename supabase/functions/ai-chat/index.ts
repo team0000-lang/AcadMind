@@ -22,7 +22,6 @@ async function gemini(contents: unknown[], systemInstruction: string) {
       generationConfig: { temperature: 0.25, maxOutputTokens: 1100 },
     }),
     signal: AbortSignal.timeout(45_000),
-    }),
   });
   if (!response.ok) {
     const detail = await response.text();
