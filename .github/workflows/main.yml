@@ -69,7 +69,7 @@ jobs:
         run: |
           rm -f test/widget_test.dart
           rmdir test 2>/dev/null || true
-      - name: Keep AcadMind Android application ID
+      - name: Configure AcadMind Android identity and launcher icon
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -78,11 +78,27 @@ jobs:
               t = p.read_text()
               t = t.replace('com.acadmind.acadmind', 'com.acadmind.app')
               p.write_text(t)
+
           manifest = root / 'src/main/AndroidManifest.xml'
           if manifest.exists():
               t = manifest.read_text().replace('android:label="acadmind"', 'android:label="AcadMind"')
-              t = t.replace('<application', '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n    <application', 1)
+              t = t.replace('android:icon="@mipmap/ic_launcher"', 'android:icon="@drawable/acadmind_icon"')
+              if 'POST_NOTIFICATIONS' not in t:
+                  t = t.replace('<application', '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n    <application', 1)
               manifest.write_text(t)
+
+          drawable = root / 'src/main/res/drawable'
+          drawable.mkdir(parents=True, exist_ok=True)
+          icon = drawable / 'acadmind_icon.xml'
+          icon.write_text('''<vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+              <path android:fillColor="#6558F5" android:pathData="M20,0 L88,0 Q108,0 108,20 L108,88 Q108,108 88,108 L20,108 Q0,108 0,88 L0,20 Q0,0 20,0 Z"/>
+              <path android:fillColor="#FFFFFF" android:pathData="M24,78 L39,30 L50,30 L66,78 L55,78 L51,66 L37,66 L33,78 Z M40,56 L48,56 L44,43 Z"/>
+              <path android:fillColor="#FFFFFF" android:pathData="M59,78 L59,30 L70,30 L79,46 L88,30 L99,30 L99,78 L88,78 L88,48 L81,61 L77,61 L70,48 L70,78 Z"/>
+          </vector>''')
           for p in root.rglob('MainActivity.kt'):
               t = p.read_text().replace('package com.acadmind.acadmind', 'package com.acadmind.app')
               target = root / 'src/main/kotlin/com/acadmind/app/MainActivity.kt'
