@@ -39,10 +39,10 @@ class _HomeScreenState extends State<HomeScreen> {
      _HomeNavItem(Icons.account_circle_rounded, Icons.account_circle_rounded, 'حسابي', 5),
    ];
    return Scaffold(
-     extendBody: true,
+     extendBody: false,
      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
      body: SafeArea(
-       bottom: false,
+       bottom: true,
        child: IndexedStack(index: tab, children: pages),
      ),
      floatingActionButton: owner
@@ -870,17 +870,368 @@ class _TypingIndicator extends StatelessWidget {
   }
 }
 
-class ProfilePage extends StatefulWidget { const ProfilePage({super.key}); @override State<ProfilePage> createState()=>_ProfilePageState(); }
+
+class ProfilePage extends StatefulWidget {
+  const ProfilePage({super.key});
+  @override
+  State<ProfilePage> createState() => _ProfilePageState();
+}
+
 class _ProfilePageState extends State<ProfilePage> {
-  late Future<Map<String,dynamic>> future;
-  @override void initState(){super.initState();future=AcadMindData.profile();}
-  Future<void> reload()async{setState(()=>future=AcadMindData.profile());}
-  Future<void> edit(Map<String,dynamic> p)async{
-    final name=TextEditingController(text:'${p['full_name']??''}'),phone=TextEditingController(text:'${p['phone']??''}');
-    await showDialog(context:context,builder:(ctx)=>AlertDialog(title:const Text('تعديل الملف الشخصي'),content:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:name,decoration:const InputDecoration(labelText:'الاسم')),TextField(controller:phone,decoration:const InputDecoration(labelText:'رقم الهاتف'))]),actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إلغاء')),FilledButton(onPressed:()async{try{await supabase.from('profiles').update({'full_name':name.text.trim(),'phone':phone.text.trim()}).eq('id',supabase.auth.currentUser!.id);if(ctx.mounted)Navigator.pop(ctx);reload();}catch(e){if(ctx.mounted)ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content:Text('فشل الحفظ: $e')));}},child:const Text('حفظ'))]));name.dispose();phone.dispose();
+  late Future<Map<String, dynamic>> future;
+
+  @override
+  void initState() {
+    super.initState();
+    future = AcadMindData.profile();
   }
-  Future<void> changePassword()async{final password=TextEditingController(),confirm=TextEditingController();await showDialog(context:context,builder:(ctx)=>AlertDialog(title:const Text('تغيير كلمة المرور'),content:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:password,obscureText:true,decoration:const InputDecoration(labelText:'كلمة المرور الجديدة')),TextField(controller:confirm,obscureText:true,decoration:const InputDecoration(labelText:'تأكيد كلمة المرور'))]),actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إلغاء')),FilledButton(onPressed:()async{if(password.text.length<8||password.text!=confirm.text){ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content:Text('تأكد من تطابق كلمتي المرور وأن تكون 8 أحرف على الأقل')));return;}try{await supabase.auth.updateUser(UserAttributes(password:password.text));if(ctx.mounted)Navigator.pop(ctx);if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('تم تغيير كلمة المرور')));}catch(e){if(ctx.mounted)ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content:Text('$e')));}},child:const Text('تحديث'))]));password.dispose();confirm.dispose();}
-  @override Widget build(BuildContext c)=>FutureBuilder<Map<String,dynamic>>(future:future,builder:(c,s){if(!s.hasData)return s.hasError?Center(child:Text('تعذر تحميل الحساب: ${s.error}')):const Center(child:CircularProgressIndicator());final p=s.data!;String related(String key)=>p[key] is Map?'${p[key]['name_ar']??p[key]['name']??''}':'';return ListView(padding:const EdgeInsets.all(16),children:[const CircleAvatar(radius:38,child:Icon(Icons.person,size:42)),const SizedBox(height:12),Center(child:Text('${p['full_name']??'طالب AcadMind'}',style:const TextStyle(fontSize:22,fontWeight:FontWeight.bold))),Center(child:Text('${p['email']??''}',style:const TextStyle(color:Colors.black54))),const SizedBox(height:18),Card(child:Column(children:[ListTile(leading:const Icon(Icons.phone),title:const Text('رقم الهاتف'),subtitle:Text('${p['phone']??'غير مضاف'}')),ListTile(leading:const Icon(Icons.school),title:const Text('السنة الدراسية'),subtitle:Text(related('academic_years').isEmpty?'لم يتم التعيين':related('academic_years'))),ListTile(leading:const Icon(Icons.groups),title:const Text('المجموعة والسكشن'),subtitle:Text((related('groups') + ' • ' + related('sections')).trim()),trailing:const Icon(Icons.edit_outlined),onTap:()async{final changed=await Navigator.push<bool>(c,MaterialPageRoute(builder:(_)=>const StudentSetupScreen(forceEdit:true)));if(changed==true)reload();}),ListTile(leading:const Icon(Icons.verified_user),title:const Text('نوع الحساب وحالته'),subtitle:Text('${p['role']} • ${p['status']}'))])),const SizedBox(height:10),FilledButton.icon(onPressed:()=>edit(p),icon:const Icon(Icons.edit),label:const Text('تعديل بياناتي')),Card(child:Column(children:[ListTile(leading:const Icon(Icons.info_outline_rounded),title:const Text('حول التطبيق'),subtitle:const Text('تعرف على AcadMind وفريق التطوير'),trailing:const Icon(Icons.chevron_left_rounded),onTap:()=>Navigator.push(c,MaterialPageRoute(builder:(_)=>const AboutScreen())))])),Card(child:Column(children:[ListTile(title:const Text('المظهر'),leading:const Icon(Icons.dark_mode_outlined),trailing:DropdownButton<ThemeMode>(value:appThemeMode.value,items:const [DropdownMenuItem(value:ThemeMode.system,child:Text('حسب الجهاز')),DropdownMenuItem(value:ThemeMode.light,child:Text('فاتح')),DropdownMenuItem(value:ThemeMode.dark,child:Text('داكن'))],onChanged:(v){if(v!=null)saveThemeMode(v);})),const ListTile(title:Text('اللغة'),leading:Icon(Icons.language),subtitle:Text('الواجهة العربية متاحة حالياً'))])),OutlinedButton.icon(onPressed:()=>Navigator.push(c,MaterialPageRoute(builder:(_)=>const FeedbackScreen())),icon:const Icon(Icons.feedback_outlined),label:const Text('اقتراح أو الإبلاغ عن مشكلة')),OutlinedButton.icon(onPressed:changePassword,icon:const Icon(Icons.lock_reset),label:const Text('تغيير كلمة المرور')),OutlinedButton.icon(onPressed:()async{await supabase.auth.signOut();},icon:const Icon(Icons.logout),label:const Text('تسجيل الخروج'))]);});
+
+  void reload() {
+    if (mounted) setState(() => future = AcadMindData.profile());
+  }
+
+  String related(Map<String, dynamic> profile, String key) {
+    final item = profile[key];
+    if (item is! Map) return '';
+    return (item['name_ar'] ?? item['code'] ?? item['name'] ?? '').toString();
+  }
+
+  Future<void> editProfile(Map<String, dynamic> profile) async {
+    final name = TextEditingController(text: (profile['full_name'] ?? '').toString());
+    final phone = TextEditingController(text: (profile['phone'] ?? '').toString());
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('تعديل بيانات الحساب'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(controller: name, decoration: const InputDecoration(labelText: 'الاسم بالكامل')),
+          const SizedBox(height: 12),
+          TextField(controller: phone, keyboardType: TextInputType.phone,
+            decoration: const InputDecoration(labelText: 'رقم الهاتف')),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('إلغاء')),
+          FilledButton(
+            onPressed: () async {
+              if (name.text.trim().isEmpty) {
+                ScaffoldMessenger.of(dialogContext).showSnackBar(
+                  const SnackBar(content: Text('اكتب الاسم الأول')),
+                );
+                return;
+              }
+              try {
+                await supabase.from('profiles').update({
+                  'full_name': name.text.trim(),
+                  'phone': phone.text.trim().isEmpty ? null : phone.text.trim(),
+                }).eq('id', supabase.auth.currentUser!.id);
+                if (!dialogContext.mounted) return;
+                Navigator.pop(dialogContext);
+                reload();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('تم تحديث بيانات الحساب')),
+                );
+              } catch (e) {
+                if (dialogContext.mounted) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    SnackBar(content: Text('تعذر حفظ البيانات: ' + e.toString())),
+                  );
+                }
+              }
+            },
+            child: const Text('حفظ التغييرات'),
+          ),
+        ],
+      ),
+    );
+    name.dispose();
+    phone.dispose();
+  }
+
+  Future<void> changePassword() async {
+    final password = TextEditingController();
+    final confirm = TextEditingController();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('تغيير كلمة المرور'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(controller: password, obscureText: true,
+            decoration: const InputDecoration(labelText: 'كلمة المرور الجديدة')),
+          const SizedBox(height: 12),
+          TextField(controller: confirm, obscureText: true,
+            decoration: const InputDecoration(labelText: 'تأكيد كلمة المرور')),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('إلغاء')),
+          FilledButton(
+            onPressed: () async {
+              if (password.text.length < 8 || password.text != confirm.text) {
+                ScaffoldMessenger.of(dialogContext).showSnackBar(
+                  const SnackBar(content: Text('تأكد من تطابق كلمتي المرور وأن تكون 8 أحرف على الأقل')),
+                );
+                return;
+              }
+              try {
+                await supabase.auth.updateUser(UserAttributes(password: password.text));
+                if (!dialogContext.mounted) return;
+                Navigator.pop(dialogContext);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('تم تغيير كلمة المرور بنجاح')),
+                );
+              } on AuthException catch (e) {
+                if (dialogContext.mounted) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(content: Text(e.message)));
+                }
+              } catch (e) {
+                if (dialogContext.mounted) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(content: Text('تعذر تغيير كلمة المرور: ' + e.toString())));
+                }
+              }
+            },
+            child: const Text('تحديث كلمة المرور'),
+          ),
+        ],
+      ),
+    );
+    password.dispose();
+    confirm.dispose();
+  }
+
+  Future<void> openAcademicSetup() async {
+    final changed = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => const StudentSetupScreen(forceEdit: true)),
+    );
+    if (changed == true) reload();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return FutureBuilder<Map<String, dynamic>>(
+      future: future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError || !snapshot.hasData) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.person_off_rounded, size: 42),
+                const SizedBox(height: 12),
+                const Text('مش قادرين نحمّل بيانات الحساب'),
+                const SizedBox(height: 12),
+                FilledButton.icon(onPressed: reload, icon: const Icon(Icons.refresh_rounded), label: const Text('إعادة المحاولة')),
+              ]),
+            ),
+          );
+        }
+
+        final p = snapshot.data!;
+        final fullName = (p['full_name'] ?? '').toString().trim();
+        final displayName = fullName.isEmpty ? 'طالب AcadMind' : fullName;
+        final email = (p['email'] ?? 'حساب ضيف').toString();
+        final year = related(p, 'academic_years');
+        final group = related(p, 'groups');
+        final section = related(p, 'sections');
+        final scope = [group, section].where((value) => value.isNotEmpty).join(' • ');
+        final isOwner = p['role'] == 'owner';
+        final initial = displayName.isEmpty ? 'A' : displayName.substring(0, 1);
+
+        return Directionality(
+          textDirection: TextDirection.rtl,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 34),
+            children: [
+              Row(children: [
+                const Expanded(child: Text('حسابي', style: TextStyle(fontSize: 23, fontWeight: FontWeight.w900))),
+                IconButton(onPressed: reload, tooltip: 'تحديث البيانات', icon: const Icon(Icons.refresh_rounded)),
+              ]),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topRight,
+                    end: Alignment.bottomLeft,
+                    colors: [Color(0xFF171A3D), Color(0xFF39328F), Color(0xFF6255E8)],
+                  ),
+                  borderRadius: BorderRadius.circular(25),
+                  boxShadow: [BoxShadow(color: const Color(0xFF5145D6).withValues(alpha: .15), blurRadius: 22, offset: const Offset(0, 9))],
+                ),
+                child: Row(children: [
+                  CircleAvatar(
+                    radius: 31,
+                    backgroundColor: Colors.white.withValues(alpha: .16),
+                    child: Text(initial, style: const TextStyle(color: Colors.white, fontSize: 27, fontWeight: FontWeight.w900)),
+                  ),
+                  const SizedBox(width: 13),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(displayName, maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 4),
+                    Text(email, maxLines: 1, overflow: TextOverflow.ellipsis,
+                      textDirection: TextDirection.ltr,
+                      style: const TextStyle(color: Colors.white70, fontSize: 11)),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                      decoration: BoxDecoration(color: Colors.white.withValues(alpha: .14), borderRadius: BorderRadius.circular(20)),
+                      child: Text(isOwner ? 'مالك النظام' : (email == 'حساب ضيف' ? 'حساب ضيف' : 'حساب طالب'),
+                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700)),
+                    ),
+                  ])),
+                ]),
+              ),
+              const SizedBox(height: 25),
+              const _AccountHeading(title: 'البيانات الشخصية', subtitle: 'معلومات حسابك في AcadMind'),
+              const SizedBox(height: 10),
+              Card(
+                child: Column(children: [
+                  _AccountInfoTile(icon: Icons.alternate_email_rounded, title: 'البريد الإلكتروني', value: email),
+                  const Divider(height: 1, indent: 16, endIndent: 16),
+                  _AccountInfoTile(icon: Icons.phone_rounded, title: 'رقم الهاتف',
+                    value: (p['phone'] ?? '').toString().isEmpty ? 'غير مضاف' : p['phone'].toString()),
+                  const Divider(height: 1, indent: 16, endIndent: 16),
+                  _AccountInfoTile(icon: Icons.school_rounded, title: 'السنة الدراسية',
+                    value: year.isEmpty ? 'لم يتم التحديد' : year),
+                  const Divider(height: 1, indent: 16, endIndent: 16),
+                  _AccountInfoTile(icon: Icons.verified_user_outlined, title: 'حالة الحساب',
+                    value: (p['status'] ?? 'غير معروف').toString() + ' • ' + (p['role'] ?? 'student').toString()),
+                ]),
+              ),
+              const SizedBox(height: 22),
+              const _AccountHeading(title: 'بياناتك الأكاديمية', subtitle: 'المجموعة والسكشن المستخدمان في عرض الجدول'),
+              const SizedBox(height: 10),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Row(children: [
+                      Container(width: 42, height: 42,
+                        decoration: BoxDecoration(color: const Color(0xFF6255E8).withValues(alpha: .11), borderRadius: BorderRadius.circular(14)),
+                        child: const Icon(Icons.groups_rounded, color: Color(0xFF6255E8))),
+                      const SizedBox(width: 11),
+                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        const Text('المجموعة والسكشن', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13)),
+                        const SizedBox(height: 4),
+                        Text(scope.isEmpty ? 'لم يتم تحديدهما بعد' : scope,
+                          style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12)),
+                      ])),
+                    ]),
+                    if (!isOwner) ...[
+                      const SizedBox(height: 15),
+                      SizedBox(width: double.infinity, child: OutlinedButton.icon(
+                        onPressed: openAcademicSetup,
+                        icon: const Icon(Icons.edit_outlined, size: 18),
+                        label: const Text('تغيير المجموعة والسكشن'),
+                      )),
+                    ],
+                  ]),
+                ),
+              ),
+              const SizedBox(height: 22),
+              const _AccountHeading(title: 'إعدادات التطبيق', subtitle: 'خصص تجربة الاستخدام'),
+              const SizedBox(height: 10),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+                  child: Row(children: [
+                    Container(width: 39, height: 39,
+                      decoration: BoxDecoration(color: const Color(0xFF299B91).withValues(alpha: .11), borderRadius: BorderRadius.circular(13)),
+                      child: const Icon(Icons.dark_mode_outlined, color: Color(0xFF299B91))),
+                    const SizedBox(width: 11),
+                    const Expanded(child: Text('مظهر التطبيق', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13))),
+                    DropdownButton<ThemeMode>(
+                      value: appThemeMode.value,
+                      underline: const SizedBox.shrink(),
+                      items: const [
+                        DropdownMenuItem(value: ThemeMode.system, child: Text('تلقائي')),
+                        DropdownMenuItem(value: ThemeMode.light, child: Text('فاتح')),
+                        DropdownMenuItem(value: ThemeMode.dark, child: Text('داكن')),
+                      ],
+                      onChanged: (value) { if (value != null) saveThemeMode(value); },
+                    ),
+                  ]),
+                ),
+              ),
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.info_outline_rounded),
+                  title: const Text('حول التطبيق', style: TextStyle(fontWeight: FontWeight.w700)),
+                  subtitle: const Text('فريق التطوير ومعلومات الإصدار'),
+                  trailing: const Icon(Icons.chevron_left_rounded),
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutScreen())),
+                ),
+              ),
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.feedback_outlined),
+                  title: const Text('اقتراح أو الإبلاغ عن مشكلة', style: TextStyle(fontWeight: FontWeight.w700)),
+                  subtitle: const Text('ساعدنا نطوّر AcadMind'),
+                  trailing: const Icon(Icons.chevron_left_rounded),
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FeedbackScreen())),
+                ),
+              ),
+              const SizedBox(height: 18),
+              SizedBox(width: double.infinity, child: OutlinedButton.icon(
+                onPressed: () => editProfile(p),
+                icon: const Icon(Icons.edit_outlined),
+                label: const Text('تعديل بياناتي'),
+              )),
+              const SizedBox(height: 9),
+              if ((p['email'] ?? '').toString().isNotEmpty) SizedBox(width: double.infinity, child: OutlinedButton.icon(
+                onPressed: changePassword,
+                icon: const Icon(Icons.lock_reset_rounded),
+                label: const Text('تغيير كلمة المرور'),
+              )),
+              const SizedBox(height: 9),
+              SizedBox(width: double.infinity, child: OutlinedButton.icon(
+                onPressed: () async { await supabase.auth.signOut(); },
+                icon: const Icon(Icons.logout_rounded),
+                label: const Text('تسجيل الخروج'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: colors.error,
+                  side: BorderSide(color: colors.error.withValues(alpha: .35)),
+                ),
+              )),
+              const SizedBox(height: 18),
+              Center(child: Text('AcadMind • YOUR SMART ACADEMIC COMPANION',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: colors.onSurfaceVariant.withValues(alpha: .7), fontSize: 9, letterSpacing: .7))),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _AccountHeading extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  const _AccountHeading({required this.title, required this.subtitle});
+  @override
+  Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900)),
+    const SizedBox(height: 3),
+    Text(subtitle, style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+  ]);
+}
+
+class _AccountInfoTile extends StatelessWidget {
+  final IconData icon;
+  final String title, value;
+  const _AccountInfoTile({required this.icon, required this.title, required this.value});
+  @override
+  Widget build(BuildContext context) => ListTile(
+    leading: Icon(icon, color: Theme.of(context).colorScheme.primary),
+    title: Text(title, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+    subtitle: Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+    dense: true,
+  );
 }
 
 class OwnerPage extends StatelessWidget { const OwnerPage({super.key}); @override Widget build(BuildContext context) => const OwnerConsole(); }
