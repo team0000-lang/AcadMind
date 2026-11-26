@@ -134,34 +134,363 @@ class SchedulePage extends StatefulWidget {const SchedulePage({super.key});@over
 class _SchedulePageState extends State<SchedulePage> {static const days=['الأحد','الإثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];late Future<List<Map<String,dynamic>>> future;@override void initState(){super.initState();future=_load();}Future<List<Map<String,dynamic>>> _load()async{final rows=await AcadMindData.schedule();await NotificationService.instance.syncSchedule(rows);return rows;}@override Widget build(BuildContext c)=>_AsyncList<Map<String,dynamic>>(future:future,empty:'الجدول غير متاح بعد. تأكد أن الإدارة عيّنت السنة والمجموعة والشعبة لحسابك.',builder:(e)=>ListTile(leading:CircleAvatar(child:Text('${(e['day_of_week'] as int)+1}')),title:Text(((e['subjects'] is Map)?(e['subjects']['name_ar']??e['subjects']['name_en']):null)??'محاضرة'),subtitle:Text('${days[e['day_of_week'] as int]} • ${e['starts_at']} - ${e['ends_at']}\n${e['location']??''}'),isThreeLine:true,trailing:Text((e['class_type']??'') as String)));}
 class AnnouncementsPage extends StatelessWidget {const AnnouncementsPage({super.key});@override Widget build(BuildContext c)=>_AsyncList<Map<String,dynamic>>(future:AcadMindData.announcements(),empty:'لا توجد إعلانات حالياً',builder:(e)=>_AnnouncementCard(item:e));}
 class _AnnouncementCard extends StatelessWidget {final Map<String,dynamic> item;const _AnnouncementCard({required this.item});@override Widget build(BuildContext c)=>Card(child:Padding(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Row(children:[const Icon(Icons.campaign,color:Color(0xFF3157D5)),const SizedBox(width:8),Expanded(child:Text((item['title']??'إعلان') as String,style:const TextStyle(fontWeight:FontWeight.bold,fontSize:16))),Text('${item['priority']??0}/5',style:const TextStyle(fontSize:11,color:Colors.black45))]),const SizedBox(height:8),Text((item['content']??'') as String),const SizedBox(height:5),Text((item['published_at']??'') as String,style:const TextStyle(fontSize:11,color:Colors.black45))])));}
-class AiPage extends StatefulWidget { const AiPage({super.key}); @override State<AiPage> createState()=>_AiPageState(); }
+class AiPage extends StatefulWidget {
+  const AiPage({super.key});
+  @override
+  State<AiPage> createState() => _AiPageState();
+}
+
 class _AiPageState extends State<AiPage> {
-  final input=TextEditingController();
-  final messages=<Map<String,dynamic>>[];
-  bool busy=false;
+  final input = TextEditingController();
+  final scroll = ScrollController();
+  final messages = <Map<String, dynamic>>[];
+  bool busy = false;
   String? subjectId;
-  late Future<List<Map<String,dynamic>>> subjectFuture;
-  @override void initState(){super.initState();subjectFuture=supabase.from('subjects').select('id,name_ar').eq('is_active',true).isFilter('deleted_at',null).order('name_ar').then((v)=>List<Map<String,dynamic>>.from(v));}
-  @override void dispose(){input.dispose();super.dispose();}
-  Future<void> send() async {
-    final q=input.text.trim(); if(q.isEmpty||busy)return;
-    setState((){messages.add({'role':'user','content':q});busy=true;}); input.clear();
-    try {
-      final response=await supabase.functions.invoke('ai-chat',body:{'question':q,'subjectId':subjectId,'retrieve':true});
-      final data=response.data as Map<String,dynamic>;
-      final answer=(data['answer']??data['message']??data['error']??'لم يصل رد من المساعد.').toString();
-      final sources=List<Map<String,dynamic>>.from((data['sources'] as List? ?? const []).whereType<Map>().map((e)=>Map<String,dynamic>.from(e)));
-      if(mounted)setState(()=>messages.add({'role':'assistant','content':answer,'sources':sources}));
-    } on FunctionException catch(e) { if(mounted)setState(()=>messages.add({'role':'assistant','content':'تعذر تشغيل المساعد: ${e.details??e.reasonPhrase??e.toString()}','sources':[]})); }
-    catch(e) { if(mounted)setState(()=>messages.add({'role':'assistant','content':'حدث خطأ أثناء الاتصال بالمساعد: $e','sources':[]})); }
-    finally {if(mounted)setState(()=>busy=false);}
+  String? conversationId;
+  late Future<List<Map<String, dynamic>>> subjectFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    subjectFuture = supabase.from('subjects').select('id,name_ar').eq('is_active', true).isFilter('deleted_at', null).order('name_ar').then((v) => List<Map<String, dynamic>>.from(v));
   }
-  @override Widget build(BuildContext c)=>Column(children:[
-    Padding(padding:const EdgeInsets.fromLTRB(12,10,12,4),child:FutureBuilder<List<Map<String,dynamic>>>(future:subjectFuture,builder:(c,s){final items=s.data??[];return DropdownButtonFormField<String>(value:subjectId,decoration:const InputDecoration(labelText:'المادة المستخدمة كمصدر للإجابة',prefixIcon:Icon(Icons.menu_book)),items:[const DropdownMenuItem<String>(value:null,child:Text('سؤال عام بدون تحديد مادة')),...items.map((e)=>DropdownMenuItem<String>(value:'${e['id']}',child:Text('${e['name_ar']}')))],onChanged:(v)=>setState(()=>subjectId=v));})),
-    Expanded(child:messages.isEmpty?const Center(child:Padding(padding:EdgeInsets.all(28),child:Column(mainAxisSize:MainAxisSize.min,children:[Icon(Icons.auto_awesome,size:48,color:Color(0xFF3157D5)),SizedBox(height:14),Text('اسأل AcadMind AI',style:TextStyle(fontSize:22,fontWeight:FontWeight.bold)),Text('اختر المادة للحصول على إجابة مدعومة بملفات المحاضرات التي رفعتها الإدارة.',textAlign:TextAlign.center)]))):ListView(padding:const EdgeInsets.all(12),children:messages.map((m)=>Align(alignment:m['role']=='user'?Alignment.centerRight:Alignment.centerLeft,child:Container(margin:const EdgeInsets.symmetric(vertical:6),padding:const EdgeInsets.all(14),constraints:const BoxConstraints(maxWidth:600),decoration:BoxDecoration(color:m['role']=='user'?const Color(0xFFE4EAFE):Colors.white,borderRadius:BorderRadius.circular(16)),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[m['role']=='assistant'?MarkdownBody(data:m['content'] as String):Text(m['content'] as String),if((m['sources'] as List? ?? const []).isNotEmpty)...[const Divider(),const Text('المراجع المستخدمة',style:TextStyle(fontWeight:FontWeight.bold)),...(m['sources'] as List).map((src)=>Text('• ${src['documentName']??'ملف المادة'}${src['page']==null?'':' — صفحة ${src['page']}'}',style:const TextStyle(fontSize:12)))]])))).toList())),
-    if(busy)const LinearProgressIndicator(),
-    SafeArea(child:Padding(padding:const EdgeInsets.all(10),child:Row(children:[Expanded(child:TextField(controller:input,minLines:1,maxLines:4,decoration:const InputDecoration(hintText:'اكتب سؤالك هنا...'))),const SizedBox(width:8),IconButton.filled(onPressed:busy?null:send,icon:const Icon(Icons.send))])))
-  ]);
+
+  @override
+  void dispose() {
+    input.dispose();
+    scroll.dispose();
+    super.dispose();
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (scroll.hasClients) scroll.animateTo(scroll.position.maxScrollExtent, duration: const Duration(milliseconds: 350), curve: Curves.easeOutCubic);
+    });
+  }
+
+  void _newChat() {
+    if (busy) return;
+    setState(() {
+      messages.clear();
+      conversationId = null;
+    });
+  }
+
+  Future<void> _sendPrompt(String prompt) async {
+    input.text = prompt;
+    await send();
+  }
+
+  Future<void> send() async {
+    final question = input.text.trim();
+    if (question.isEmpty || busy) return;
+    setState(() {
+      messages.add({'role': 'user', 'content': question});
+      busy = true;
+    });
+    input.clear();
+    _scrollToBottom();
+    try {
+      final response = await supabase.functions.invoke('ai-chat', body: {
+        'question': question,
+        'subjectId': subjectId,
+        'conversationId': conversationId,
+        'retrieve': true,
+      });
+      final data = Map<String, dynamic>.from(response.data as Map);
+      final answer = (data['answer'] ?? data['message'] ?? data['error'] ?? 'لم يصل رد من المساعد.').toString();
+      final sources = List<Map<String, dynamic>>.from((data['sources'] as List? ?? const []).whereType<Map>().map((e) => Map<String, dynamic>.from(e)));
+      if (mounted) {
+        setState(() {
+          conversationId = data['conversationId']?.toString() ?? conversationId;
+          messages.add({'role': 'assistant', 'content': answer, 'sources': sources});
+        });
+        _scrollToBottom();
+      }
+    } on FunctionException catch (e) {
+      if (mounted) {
+        setState(() => messages.add({'role': 'assistant', 'content': 'تعذر تشغيل المساعد: ${e.details ?? e.reasonPhrase ?? e.toString()}', 'sources': []}));
+        _scrollToBottom();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => messages.add({'role': 'assistant', 'content': 'حدث خطأ أثناء الاتصال بالمساعد. حاول مرة أخرى.', 'sources': []}));
+        _scrollToBottom();
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(15, 13, 8, 13),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(begin: Alignment.topRight, end: Alignment.bottomLeft, colors: [colors.primary, colors.primary.withValues(alpha: .78)]),
+              borderRadius: BorderRadius.circular(22),
+              boxShadow: [BoxShadow(color: colors.primary.withValues(alpha: .16), blurRadius: 18, offset: const Offset(0, 7))],
+            ),
+            child: Row(
+              children: [
+                Container(width: 43, height: 43, decoration: BoxDecoration(color: Colors.white.withValues(alpha: .16), borderRadius: BorderRadius.circular(14)), child: const Icon(Icons.auto_awesome_rounded, color: Colors.white)),
+                const SizedBox(width: 11),
+                const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('AcadMind AI', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800)),
+                  SizedBox(height: 3),
+                  Text('مساعدك الدراسي الذكي', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                ])),
+                IconButton(onPressed: _newChat, tooltip: 'محادثة جديدة', icon: const Icon(Icons.add_comment_outlined, color: Colors.white)),
+              ],
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+          child: FutureBuilder<List<Map<String, dynamic>>>(
+            future: subjectFuture,
+            builder: (context, snapshot) => DropdownButtonFormField<String>(
+              value: subjectId,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: 'المادة الدراسية',
+                prefixIcon: Icon(Icons.menu_book_rounded),
+                contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+              ),
+              items: [
+                const DropdownMenuItem<String>(value: null, child: Text('سؤال عام — كل المواد')),
+                ...(snapshot.data ?? []).map((item) => DropdownMenuItem<String>(value: '${item['id']}', child: Text('${item['name_ar']}'))),
+              ],
+              onChanged: busy ? null : (value) {
+                setState(() {
+                  subjectId = value;
+                  conversationId = null;
+                  messages.clear();
+                });
+              },
+            ),
+          ),
+        ),
+        Expanded(
+          child: messages.isEmpty
+              ? _ChatWelcome(onPrompt: _sendPrompt)
+              : ListView.builder(
+                  controller: scroll,
+                  padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
+                  itemCount: messages.length + (busy ? 1 : 0),
+                  itemBuilder: (context, index) {
+                    if (index == messages.length) return const _TypingIndicator();
+                    return _ChatBubble(message: messages[index], index: index);
+                  },
+                ),
+        ),
+        SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(12, 7, 7, 7),
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardColor,
+                borderRadius: BorderRadius.circular(23),
+                border: Border.all(color: colors.outlineVariant.withValues(alpha: .65)),
+                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: .035), blurRadius: 18, offset: const Offset(0, 5))],
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: input,
+                      minLines: 1,
+                      maxLines: 5,
+                      textInputAction: TextInputAction.send,
+                      onSubmitted: (_) => send(),
+                      decoration: const InputDecoration(hintText: 'اسأل عن محاضرة أو مفهوم...', border: InputBorder.none, filled: false, contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10)),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    width: 46,
+                    height: 46,
+                    child: IconButton.filled(
+                      onPressed: busy ? null : send,
+                      tooltip: 'إرسال',
+                      icon: const Icon(Icons.arrow_upward_rounded),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ChatWelcome extends StatelessWidget {
+  final ValueChanged<String> onPrompt;
+  const _ChatWelcome({required this.onPrompt});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final suggestions = [
+      ('اشرحلي موضوع صعب', Icons.lightbulb_outline_rounded),
+      ('لخصلي المحاضرة', Icons.summarize_rounded),
+      ('اعمللي أسئلة للمراجعة', Icons.quiz_outlined),
+      ('نظملي خطة مذاكرة', Icons.event_note_rounded),
+    ];
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(22, 22, 22, 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TweenAnimationBuilder<double>(
+              tween: Tween(begin: .75, end: 1),
+              duration: const Duration(milliseconds: 650),
+              curve: Curves.easeOutBack,
+              builder: (context, value, child) => Transform.scale(scale: value, child: child),
+              child: Container(
+                width: 82,
+                height: 82,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [colors.primary, colors.tertiary]),
+                  borderRadius: BorderRadius.circular(27),
+                  boxShadow: [BoxShadow(color: colors.primary.withValues(alpha: .20), blurRadius: 25, offset: const Offset(0, 10))],
+                ),
+                child: const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 39),
+              ),
+            ),
+            const SizedBox(height: 21),
+            const Text('ابدأ سؤالك مع AcadMind', textAlign: TextAlign.center, style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 8),
+            Text('اسأل، افهم، ولخّص. اختار مادة علشان المساعد يقدر يرجع لمصادرها ومحاضراتها.', textAlign: TextAlign.center, style: TextStyle(height: 1.6, color: colors.onSurfaceVariant, fontSize: 13)),
+            const SizedBox(height: 23),
+            ...suggestions.map((item) => Padding(
+              padding: const EdgeInsets.only(bottom: 9),
+              child: Material(
+                color: Theme.of(context).cardColor,
+                borderRadius: BorderRadius.circular(16),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: () => onPrompt(item.$1),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
+                    decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), border: Border.all(color: colors.outlineVariant.withValues(alpha: .65))),
+                    child: Row(children: [
+                      Icon(item.$2, color: colors.primary, size: 20),
+                      const SizedBox(width: 12),
+                      Expanded(child: Text(item.$1, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
+                      Icon(Icons.arrow_back_ios_new_rounded, size: 14, color: colors.onSurfaceVariant),
+                    ]),
+                  ),
+                ),
+              ),
+            )),
+            const SizedBox(height: 5),
+            Text('قد يخطئ الذكاء الاصطناعي؛ راجع المعلومات المهمة من مصادرها.', textAlign: TextAlign.center, style: TextStyle(color: colors.onSurfaceVariant, fontSize: 10)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ChatBubble extends StatelessWidget {
+  final Map<String, dynamic> message;
+  final int index;
+  const _ChatBubble({required this.message, required this.index});
+
+  @override
+  Widget build(BuildContext context) {
+    final isUser = message['role'] == 'user';
+    final colors = Theme.of(context).colorScheme;
+    final sources = (message['sources'] as List? ?? const []);
+    return TweenAnimationBuilder<double>(
+      key: ValueKey('chat-$index'),
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) => Opacity(opacity: value, child: Transform.translate(offset: Offset(0, 12 * (1 - value)), child: child)),
+      child: Align(
+        alignment: isUser ? AlignmentDirectional.centerEnd : AlignmentDirectional.centerStart,
+        child: Container(
+          constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * .86),
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.fromLTRB(15, 12, 15, 12),
+          decoration: BoxDecoration(
+            color: isUser ? colors.primary : Theme.of(context).cardColor,
+            borderRadius: BorderRadius.only(
+              topLeft: const Radius.circular(19),
+              topRight: const Radius.circular(19),
+              bottomLeft: Radius.circular(isUser ? 19 : 5),
+              bottomRight: Radius.circular(isUser ? 5 : 19),
+            ),
+            border: isUser ? null : Border.all(color: colors.outlineVariant.withValues(alpha: .55)),
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: .025), blurRadius: 12, offset: const Offset(0, 4))],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (!isUser) Padding(
+                padding: const EdgeInsets.only(bottom: 7),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.auto_awesome_rounded, size: 15, color: colors.primary),
+                  const SizedBox(width: 6),
+                  Text('AcadMind AI', style: TextStyle(color: colors.primary, fontSize: 11, fontWeight: FontWeight.w800)),
+                ]),
+              ),
+              if (isUser)
+                Text(message['content'] as String, style: const TextStyle(color: Colors.white, height: 1.55, fontSize: 14))
+              else
+                MarkdownBody(data: message['content'] as String, selectable: true, styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(p: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.6))),
+              if (sources.isNotEmpty) ...[
+                const SizedBox(height: 9),
+                Divider(height: 1, color: colors.outlineVariant),
+                const SizedBox(height: 8),
+                Text('المصادر المستخدمة', style: TextStyle(color: colors.primary, fontSize: 11, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 4),
+                ...sources.map((source) => Padding(
+                  padding: const EdgeInsets.only(top: 3),
+                  child: Text('• ${source['documentName'] ?? 'ملف المادة'}${source['page'] == null ? '' : ' — صفحة ${source['page']}'}', style: TextStyle(color: colors.onSurfaceVariant, fontSize: 11)),
+                )),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TypingIndicator extends StatelessWidget {
+  const _TypingIndicator();
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Align(
+      alignment: AlignmentDirectional.centerStart,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
+        decoration: BoxDecoration(color: Theme.of(context).cardColor, borderRadius: BorderRadius.circular(17), border: Border.all(color: colors.outlineVariant)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          SizedBox(width: 15, height: 15, child: CircularProgressIndicator(strokeWidth: 2, color: colors.primary)),
+          const SizedBox(width: 10),
+          const Text('AcadMind بيجهز الإجابة...', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+        ]),
+      ),
+    );
+  }
 }
 
 class ProfilePage extends StatefulWidget { const ProfilePage({super.key}); @override State<ProfilePage> createState()=>_ProfilePageState(); }
