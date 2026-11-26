@@ -109,6 +109,13 @@ Deno.serve(async (request) => {
     .select("id,status").eq("id", user.id).maybeSingle();
   if (profileError || !profile || profile.status !== "active") return json({ error: "Account is not authorized" }, 403);
 
+  // Fail before charging quota or writing a conversation when the owner has not configured Gemini.
+  if (!env("GEMINI_API_KEY")) {
+    return json({
+      error: "AI service is not configured yet. The AcadMind owner must add GEMINI_API_KEY to Supabase Edge Function Secrets.",
+    }, 503);
+  }
+
   try {
     let conversationId = body.conversationId as string | undefined;
     if (conversationId) {
@@ -165,7 +172,11 @@ Deno.serve(async (request) => {
     await userClient.from("ai_conversations").update({ updated_at: new Date().toISOString() }).eq("id", conversationId);
     return json({ conversationId, answer: result.answer, sources, usage: { dailyLimit: 30, provider: "Gemini" } });
   } catch (error) {
-    console.error("ai-chat request failed", error instanceof Error ? error.message : "unknown error");
+    const message = error instanceof Error ? error.message : "unknown error";
+    console.error("ai-chat request failed", message);
+    if (message.includes("GEMINI_API_KEY")) {
+      return json({ error: "AI service is not configured yet. Contact the AcadMind owner." }, 503);
+    }
     return json({ error: "AI request failed. Check Gemini API access and try again." }, 502);
   }
 });
