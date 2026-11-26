@@ -22,7 +22,7 @@ class _PostLoginGateState extends State<PostLoginGate> {
   void retry() => setState(() => profileFuture = AcadMindData.profile());
 
   int sectionNumber(Object? value) {
-    final match = RegExp(r'\\d+').firstMatch((value ?? '').toString());
+    final match = RegExp('[0-9]+').firstMatch((value ?? '').toString());
     return int.tryParse(match?.group(0) ?? '') ?? 0;
   }
 
