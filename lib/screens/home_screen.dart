@@ -811,6 +811,20 @@ class _AiPageState extends State<AiPage> {
   Future<void> send() async {
     final question = input.text.trim();
     if (question.isEmpty || busy) return;
+    final session = supabase.auth.currentSession;
+    if (session == null) {
+      setState(() {
+        messages.add({'role': 'user', 'content': question});
+        messages.add({
+          'role': 'assistant',
+          'content': 'جلسة الدخول غير موجودة. سجّل الدخول مرة أخرى علشان تقدر تستخدم المساعد.',
+          'sources': [],
+        });
+      });
+      input.clear();
+      _scrollToBottom();
+      return;
+    }
     setState(() {
       messages.add({'role': 'user', 'content': question});
       busy = true;
@@ -818,12 +832,16 @@ class _AiPageState extends State<AiPage> {
     input.clear();
     _scrollToBottom();
     try {
-      final response = await supabase.functions.invoke('ai-chat', body: {
-        'question': question,
-        'subjectId': subjectId,
-        'conversationId': conversationId,
-        'retrieve': true,
-      });
+      final response = await supabase.functions.invoke(
+        'ai-chat',
+        headers: {'Authorization': 'Bearer ${session.accessToken}'},
+        body: {
+          'question': question,
+          'subjectId': subjectId,
+          'conversationId': conversationId,
+          'retrieve': subjectId != null,
+        },
+      );
       final data = Map<String, dynamic>.from(response.data as Map);
       final answer = (data['answer'] ?? data['message'] ?? data['error'] ?? 'لم يصل رد من المساعد.').toString();
       final sources = List<Map<String, dynamic>>.from((data['sources'] as List? ?? const []).whereType<Map>().map((e) => Map<String, dynamic>.from(e)));
@@ -1458,6 +1476,11 @@ class _ProfilePageState extends State<ProfilePage> {
                 onPressed: () async {
                   try {
                     await supabase.auth.signOut();
+                    if (!mounted) return;
+                    // The app may have been opened from a pushed login route.
+                    // Remove that protected route so the signed-out root gate is visible.
+                    Navigator.of(context, rootNavigator: true)
+                        .popUntil((route) => route.isFirst);
                   } on AuthException catch (error) {
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تعذر تسجيل الخروج: ${error.message}')));
