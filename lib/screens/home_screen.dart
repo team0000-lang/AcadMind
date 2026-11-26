@@ -1109,7 +1109,7 @@ class _ChatBubble extends StatelessWidget {
                   Icon(Icons.auto_awesome_rounded, size: 15, color: colors.primary),
                   const SizedBox(width: 6),
                   Text('إجابة AcadMind', style: TextStyle(color: colors.primary, fontSize: 11, fontWeight: FontWeight.w800)),
-                  const Spacer(),
+                  const SizedBox(width: 12),
                   IconButton(
                     visualDensity: VisualDensity.compact,
                     constraints: const BoxConstraints.tightFor(width: 30, height: 30),
