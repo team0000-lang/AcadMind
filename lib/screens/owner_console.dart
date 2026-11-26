@@ -86,7 +86,7 @@ Future<void> _editSubject(Map<String,dynamic> s)async{
   await showDialog(context:context,builder:(ctx)=>StatefulBuilder(builder:(ctx,setD)=>AlertDialog(
     title:const Text('تعديل بيانات المادة'),
     content:SizedBox(width:420,child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
-      TextField(controller:ar,decoration:const InputDecoration(labelText:'اسم المادة بالعربي')),
+      TextField(controller:ar,decoration:const InputDecoration(labelText:'اسم المادة بالعربي (اختياري)')),
       TextField(controller:en,decoration:const InputDecoration(labelText:'اسم المادة بالإنجليزي')),
       TextField(controller:code,decoration:const InputDecoration(labelText:'كود المادة')),
       TextField(controller:desc,minLines:2,maxLines:4,decoration:const InputDecoration(labelText:'وصف المادة')),
