@@ -1,0 +1,36 @@
+project_id = "skpjvgzxoholaapymvwd"
+
+[api]
+enabled = true
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+major_version = 17
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["http://localhost:3000/**", "capacitor://localhost/**", "http://localhost/**"]
+auto_confirm_email = false
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = true
+secure_password_change = true
+
+[auth.sms]
+enable_signup = true
+enable_confirmations = true
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+[functions.ai-chat]
+verify_jwt = true
+
+[functions.ingest-knowledge]
+verify_jwt = true
