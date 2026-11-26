@@ -586,7 +586,19 @@ class _AiPageState extends State<AiPage> {
       }
     } on FunctionException catch (e) {
       if (mounted) {
-        setState(() => messages.add({'role': 'assistant', 'content': 'تعذر تشغيل المساعد: ${e.details ?? e.reasonPhrase ?? e.toString()}', 'sources': []}));
+        final detail = e.details;
+        final detailText = detail is Map
+            ? (detail['error'] ?? detail['message'] ?? '').toString()
+            : (detail?.toString() ?? '');
+        final readable = detailText.contains('GEMINI_API_KEY') ||
+                detailText.toLowerCase().contains('not configured')
+            ? 'خدمة الذكاء الاصطناعي غير مهيأة على الخادم بعد. لازم مالك التطبيق يضيف مفتاح Gemini في Supabase Secrets.'
+            : (detailText.isEmpty ? (e.reasonPhrase ?? 'حاول مرة أخرى.') : detailText);
+        setState(() => messages.add({
+          'role': 'assistant',
+          'content': 'تعذر تشغيل المساعد: ' + readable,
+          'sources': [],
+        }));
         _scrollToBottom();
       }
     } catch (e) {
@@ -1189,7 +1201,11 @@ class _ProfilePageState extends State<ProfilePage> {
               )),
               const SizedBox(height: 9),
               SizedBox(width: double.infinity, child: OutlinedButton.icon(
-                onPressed: () async { await supabase.auth.signOut(); },
+                onPressed: () async {
+                  await supabase.auth.signOut();
+                  if (!context.mounted) return;
+                  Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+                },
                 icon: const Icon(Icons.logout_rounded),
                 label: const Text('تسجيل الخروج'),
                 style: OutlinedButton.styleFrom(
