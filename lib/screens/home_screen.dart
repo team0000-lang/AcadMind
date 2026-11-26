@@ -1405,8 +1405,6 @@ class _ProfilePageState extends State<ProfilePage> {
               SizedBox(width: double.infinity, child: OutlinedButton.icon(
                 onPressed: () async {
                   await supabase.auth.signOut();
-                  if (!context.mounted) return;
-                  Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
                 },
                 icon: const Icon(Icons.logout_rounded),
                 label: const Text('تسجيل الخروج'),
