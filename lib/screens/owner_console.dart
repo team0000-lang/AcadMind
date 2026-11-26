@@ -43,7 +43,41 @@ class _StudentsAdminState extends State<StudentsAdmin> {
 class SubjectsAdmin extends StatefulWidget {final VoidCallback onChanged;const SubjectsAdmin({super.key,required this.onChanged});@override State<SubjectsAdmin> createState()=>_SubjectsAdminState();}
 class _SubjectsAdminState extends State<SubjectsAdmin>{late Future<List<Map<String,dynamic>>> future;@override void initState(){super.initState();future=load();}Future<List<Map<String,dynamic>>> load()=>supabase.from('subjects').select('id,name_ar,name_en,code,description,is_active,academic_year_id,icon_path').isFilter('deleted_at',null).order('name_ar').then((v)=>List<Map<String,dynamic>>.from(v));void reload(){setState(()=>future=load());widget.onChanged();}
 Future<void> addSubject()async{final ar=TextEditingController(),en=TextEditingController(),code=TextEditingController(),desc=TextEditingController();String icon='menu_book';final ys=List<Map<String,dynamic>>.from(await supabase.from('academic_years').select('id,name_ar').order('display_order'));String? year=ys.isEmpty?null:'${ys.first['id']}';if(!mounted)return;await showDialog(context:context,builder:(ctx)=>StatefulBuilder(builder:(ctx,setD)=>AlertDialog(title:const Text('إضافة مادة'),content:SizedBox(width:420,child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:ar,decoration:const InputDecoration(labelText:'اسم المادة بالعربي')),TextField(controller:en,decoration:const InputDecoration(labelText:'اسم المادة بالإنجليزي')),TextField(controller:code,decoration:const InputDecoration(labelText:'كود المادة')),TextField(controller:desc,decoration:const InputDecoration(labelText:'وصف المادة')),DropdownButtonFormField<String>(value:icon,decoration:const InputDecoration(labelText:'أيقونة المادة'),items:const [DropdownMenuItem(value:'business',child:Text('إدارة أعمال')),DropdownMenuItem(value:'language',child:Text('لغة')),DropdownMenuItem(value:'computer',child:Text('حاسب')),DropdownMenuItem(value:'code',child:Text('برمجة')),DropdownMenuItem(value:'science',child:Text('علوم')),DropdownMenuItem(value:'calculate',child:Text('رياضيات')),DropdownMenuItem(value:'menu_book',child:Text('كتاب'))],onChanged:(v)=>setD(()=>icon=v??'menu_book')),DropdownButtonFormField<String>(value:year,decoration:const InputDecoration(labelText:'السنة الدراسية'),items:ys.map((e)=>DropdownMenuItem(value:'${e['id']}',child:Text('${e['name_ar']}'))).toList(),onChanged:(v)=>setD(()=>year=v))]))),actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إلغاء')),FilledButton(onPressed:()async{if(ar.text.trim().isEmpty||year==null)return;try{await supabase.from('subjects').insert({'name_ar':ar.text.trim(),'name_en':en.text.trim(),'code':code.text.trim().isEmpty?null:code.text.trim(),'description':desc.text.trim(),'academic_year_id':year,'icon_path':icon,'is_active':true});if(ctx.mounted)Navigator.pop(ctx);reload();}catch(e){if(ctx.mounted)ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content:Text('$e')));}},child:const Text('إضافة'))])));ar.dispose();en.dispose();code.dispose();desc.dispose();}
-Future<void> subjectActions(Map<String,dynamic> s)async{await showModalBottomSheet(context:context,builder:(ctx)=>SafeArea(child:Wrap(children:[ListTile(leading:const Icon(Icons.add),title:const Text('إضافة محاضرة'),onTap:(){Navigator.pop(ctx);_addLecture(s);}),ListTile(leading:const Icon(Icons.video_library),title:const Text('إضافة فيديو يوتيوب'),onTap:(){Navigator.pop(ctx);_addYoutube(s);}),ListTile(leading:const Icon(Icons.folder),title:const Text('إضافة مجلد Google Drive'),onTap:(){Navigator.pop(ctx);_addDrive(s);}),ListTile(leading:const Icon(Icons.tune),title:const Text('إدارة محاضرات وموارد المادة'),onTap:(){Navigator.pop(ctx);manageContent(s);}),ListTile(leading:const Icon(Icons.visibility_off),title:const Text('إخفاء المادة'),onTap:()async{Navigator.pop(ctx);await supabase.from('subjects').update({'is_active':false}).eq('id',s['id']);reload();})])));}
+Future<void> subjectActions(Map<String,dynamic> s)async{
+  await showModalBottomSheet(context:context,builder:(ctx)=>SafeArea(child:Wrap(children:[
+    ListTile(leading:const Icon(Icons.edit_outlined),title:const Text('تعديل بيانات المادة'),onTap:(){Navigator.pop(ctx);_editSubject(s);}),
+    ListTile(leading:const Icon(Icons.add),title:const Text('إضافة محاضرة'),onTap:(){Navigator.pop(ctx);_addLecture(s);}),
+    ListTile(leading:const Icon(Icons.video_library),title:const Text('إضافة فيديو يوتيوب'),onTap:(){Navigator.pop(ctx);_addYoutube(s);}),
+    ListTile(leading:const Icon(Icons.folder),title:const Text('إضافة مجلد Google Drive'),onTap:(){Navigator.pop(ctx);_addDrive(s);}),
+    ListTile(leading:const Icon(Icons.tune),title:const Text('إدارة محاضرات وموارد المادة'),onTap:(){Navigator.pop(ctx);manageContent(s);}),
+    ListTile(leading:Icon(s['is_active']==true?Icons.visibility_off:Icons.visibility),title:Text(s['is_active']==true?'إخفاء المادة':'إظهار المادة'),onTap:()async{Navigator.pop(ctx);await supabase.from('subjects').update({'is_active':!(s['is_active']==true)}).eq('id',s['id']);reload();}),
+  ])));
+}
+Future<void> _editSubject(Map<String,dynamic> s)async{
+  final ar=TextEditingController(text:'${s['name_ar']??''}');
+  final en=TextEditingController(text:'${s['name_en']??''}');
+  final code=TextEditingController(text:'${s['code']??''}');
+  final desc=TextEditingController(text:'${s['description']??''}');
+  String icon='${s['icon_path']??'menu_book'}';
+  if(!mounted)return;
+  await showDialog(context:context,builder:(ctx)=>StatefulBuilder(builder:(ctx,setD)=>AlertDialog(
+    title:const Text('تعديل بيانات المادة'),
+    content:SizedBox(width:420,child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
+      TextField(controller:ar,decoration:const InputDecoration(labelText:'اسم المادة بالعربي')),
+      TextField(controller:en,decoration:const InputDecoration(labelText:'اسم المادة بالإنجليزي')),
+      TextField(controller:code,decoration:const InputDecoration(labelText:'كود المادة')),
+      TextField(controller:desc,minLines:2,maxLines:4,decoration:const InputDecoration(labelText:'وصف المادة')),
+      DropdownButtonFormField<String>(value:icon,decoration:const InputDecoration(labelText:'أيقونة المادة'),items:const [
+        DropdownMenuItem(value:'business',child:Text('إدارة أعمال')),DropdownMenuItem(value:'language',child:Text('لغة')),DropdownMenuItem(value:'computer',child:Text('حاسب')),DropdownMenuItem(value:'code',child:Text('برمجة')),DropdownMenuItem(value:'science',child:Text('علوم')),DropdownMenuItem(value:'calculate',child:Text('رياضيات')),DropdownMenuItem(value:'menu_book',child:Text('كتاب')),
+      ],onChanged:(v)=>setD(()=>icon=v??'menu_book')),
+    ]))),
+    actions:[
+      TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إلغاء')),
+      FilledButton(onPressed:()async{try{if(ar.text.trim().isEmpty)throw Exception('اسم المادة مطلوب');await supabase.from('subjects').update({'name_ar':ar.text.trim(),'name_en':en.text.trim(),'code':code.text.trim(),'description':desc.text.trim(),'icon_path':icon}).eq('id',s['id']);if(ctx.mounted)Navigator.pop(ctx);reload();}catch(e){if(ctx.mounted)ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content:Text('تعذر الحفظ: $e')));}},child:const Text('حفظ التعديلات')),
+    ],
+  )));
+  ar.dispose();en.dispose();code.dispose();desc.dispose();
+}
 Future<void> manageContent(Map<String,dynamic> subject)async{
   final id=subject['id'];
   final lectures=List<Map<String,dynamic>>.from(await supabase.from('lectures').select('id,title').eq('subject_id',id).eq('is_active',true).isFilter('deleted_at',null));
