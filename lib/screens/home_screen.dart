@@ -23,69 +23,128 @@ class DashboardPage extends StatelessWidget {
   const DashboardPage({super.key, required this.onNavigate});
 
   @override
-  Widget build(BuildContext context) => ListView(
-    padding: const EdgeInsets.all(16),
-    children: [
-      FutureBuilder<Map<String, dynamic>>(
-        future: AcadMindData.profile(),
-        builder: (context, snapshot) {
-          final profile = snapshot.data;
-          final name = profile == null ? 'طالب' : (profile['full_name'] ?? 'طالب').toString();
-          final academic = profile?['academic_years'];
-          final year = academic is Map ? (academic['name_ar'] ?? '').toString() : '';
-          return Container(
-            padding: const EdgeInsets.all(22),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [Color(0xFF263FAE), Color(0xFF5276F0)]),
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('أهلاً بيك 👋', style: TextStyle(color: Colors.white70)),
-                Text(name, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                Text(year.isEmpty ? 'منظّمك الدراسي في مكان واحد' : year, style: const TextStyle(color: Colors.white70)),
-              ],
-            ),
-          );
-        },
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+      children: [
+        FutureBuilder<Map<String, dynamic>>(
+          future: AcadMindData.profile(),
+          builder: (context, snapshot) {
+            final profile = snapshot.data;
+            final rawName = (profile?['full_name'] ?? '').toString().trim();
+            final name = rawName.isEmpty ? 'يا بطل' : rawName.split(' ').first;
+            final academic = profile?['academic_years'];
+            final year = academic is Map ? (academic['name_ar'] ?? '').toString() : '';
+            return Container(
+              padding: const EdgeInsets.all(22),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(begin: Alignment.topRight, end: Alignment.bottomLeft, colors: [Color(0xFF27215F), Color(0xFF5549D8), Color(0xFF8276FF)]),
+                borderRadius: BorderRadius.circular(27),
+                boxShadow: [BoxShadow(color: const Color(0xFF5549D8).withValues(alpha: .20), blurRadius: 24, offset: const Offset(0, 11))],
+              ),
+              child: Stack(
+                children: [
+                  Positioned(left: -12, top: -16, child: Icon(Icons.auto_awesome, size: 105, color: Colors.white.withValues(alpha: .08))),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        Container(width: 38, height: 38, decoration: BoxDecoration(color: Colors.white.withValues(alpha: .15), borderRadius: BorderRadius.circular(13)), child: const Icon(Icons.waving_hand_rounded, color: Colors.white, size: 20)),
+                        const SizedBox(width: 10),
+                        const Text('مساحتك الدراسية', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
+                      ]),
+                      const SizedBox(height: 18),
+                      Text('أهلاً، $name 👋', style: const TextStyle(color: Colors.white, fontSize: 25, fontWeight: FontWeight.w900)),
+                      const SizedBox(height: 7),
+                      Text(year.isEmpty ? 'كل اللي تحتاجه علشان تذاكر بذكاء في مكان واحد.' : year, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        height: 43,
+                        child: FilledButton.tonalIcon(
+                          onPressed: () => onNavigate(4),
+                          icon: const Icon(Icons.auto_awesome_rounded, size: 17),
+                          label: const Text('ابدأ محادثة مع AI'),
+                          style: FilledButton.styleFrom(backgroundColor: Colors.white, foregroundColor: const Color(0xFF4339BD), padding: const EdgeInsets.symmetric(horizontal: 15)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 25),
+        Row(children: [
+          const Expanded(child: Text('اختصاراتك', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900))),
+          Text('الوصول السريع', style: TextStyle(color: colors.onSurfaceVariant, fontSize: 11)),
+        ]),
+        const SizedBox(height: 13),
+        GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: 2,
+          mainAxisSpacing: 11,
+          crossAxisSpacing: 11,
+          childAspectRatio: 1.42,
+          children: [
+            _QuickTile(icon: Icons.menu_book_rounded, title: 'المواد الدراسية', subtitle: 'محاضرات ومصادر', tint: const Color(0xFF5B65D8), onTap: () => onNavigate(1)),
+            _QuickTile(icon: Icons.calendar_month_rounded, title: 'جدول المحاضرات', subtitle: 'مواعيدك الأسبوعية', tint: const Color(0xFF1D9A91), onTap: () => onNavigate(2)),
+            _QuickTile(icon: Icons.campaign_rounded, title: 'الإعلانات', subtitle: 'آخر أخبار الكلية', tint: const Color(0xFFE18B42), onTap: () => onNavigate(3)),
+            _QuickTile(icon: Icons.auto_awesome_rounded, title: 'المساعد الذكي', subtitle: 'اسأل وذاكر بذكاء', tint: const Color(0xFF8B62D9), onTap: () => onNavigate(4)),
+          ],
+        ),
+        const SizedBox(height: 25),
+        Row(children: [
+          const Expanded(child: Text('آخر الإعلانات', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900))),
+          Icon(Icons.notifications_none_rounded, color: colors.primary, size: 20),
+        ]),
+        const SizedBox(height: 12),
+        FutureBuilder<List<Map<String, dynamic>>>(
+          future: AcadMindData.announcements(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator()));
+            if (snapshot.hasError) return _ErrorBox(message: 'تعذر تحميل الإعلانات: ${snapshot.error}');
+            final items = snapshot.data ?? [];
+            if (items.isEmpty) return const _EmptyBox(text: 'لا توجد إعلانات حالياً');
+            return Column(children: items.take(3).map((item) => Padding(padding: const EdgeInsets.only(bottom: 9), child: _AnnouncementCard(item: item))).toList());
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _QuickTile extends StatelessWidget {
+  final IconData icon;
+  final String title, subtitle;
+  final Color tint;
+  final VoidCallback onTap;
+  const _QuickTile({required this.icon, required this.title, required this.subtitle, required this.tint, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: Theme.of(context).cardColor,
+    borderRadius: BorderRadius.circular(21),
+    child: InkWell(
+      borderRadius: BorderRadius.circular(21),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(15),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(21), border: Border.all(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: .55))),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+          Container(width: 39, height: 39, decoration: BoxDecoration(color: tint.withValues(alpha: .12), borderRadius: BorderRadius.circular(13)), child: Icon(icon, color: tint, size: 21)),
+          const SizedBox(height: 12),
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
+          const SizedBox(height: 3),
+          Text(subtitle, style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+        ]),
       ),
-      const SizedBox(height: 22),
-      const Text('الوصول السريع', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-      const SizedBox(height: 12),
-      GridView.count(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        crossAxisCount: 2,
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
-        childAspectRatio: 1.55,
-        children: [
-          _QuickTile(icon: Icons.menu_book, title: 'المواد الدراسية', subtitle: 'محاضرات ومصادر', onTap: () => onNavigate(1)),
-          _QuickTile(icon: Icons.calendar_month, title: 'جدول المحاضرات', subtitle: 'مواعيدك الأسبوعية', onTap: () => onNavigate(2)),
-          _QuickTile(icon: Icons.campaign, title: 'الإعلانات', subtitle: 'آخر أخبار الكلية', onTap: () => onNavigate(3)),
-          _QuickTile(icon: Icons.auto_awesome, title: 'المساعد الذكي', subtitle: 'اسأل وذاكر بذكاء', onTap: () => onNavigate(4)),
-        ],
-      ),
-      const SizedBox(height: 22),
-      const Text('آخر الإعلانات', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-      const SizedBox(height: 8),
-      FutureBuilder<List<Map<String, dynamic>>>(
-        future: AcadMindData.announcements(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-          if (snapshot.hasError) return _ErrorBox(message: 'تعذر تحميل الإعلانات: ${snapshot.error}');
-          final items = snapshot.data ?? [];
-          if (items.isEmpty) return const _EmptyBox(text: 'لا توجد إعلانات حالياً');
-          return Column(children: items.take(3).map((item) => _AnnouncementCard(item: item)).toList());
-        },
-      ),
-    ],
+    ),
   );
 }
 
-class _QuickTile extends StatelessWidget {final IconData icon;final String title,subtitle;final VoidCallback onTap;const _QuickTile({required this.icon,required this.title,required this.subtitle,required this.onTap});@override Widget build(BuildContext c)=>Card(child:InkWell(borderRadius:BorderRadius.circular(20),onTap:onTap,child:Padding(padding:const EdgeInsets.all(14),child:Column(crossAxisAlignment:CrossAxisAlignment.start,mainAxisAlignment:MainAxisAlignment.center,children:[Icon(icon,color:Theme.of(c).colorScheme.primary,size:27),const SizedBox(height:9),Text(title,style:const TextStyle(fontWeight:FontWeight.bold)),Text(subtitle,style:const TextStyle(fontSize:12,color:Colors.black54))]))));}
 class SubjectsPage extends StatelessWidget {const SubjectsPage({super.key});@override Widget build(BuildContext c)=>_AsyncList<Map<String,dynamic>>(future:AcadMindData.subjects(),empty:'لا توجد مواد مضافة لحسابك بعد',builder:(item)=>ListTile(leading:const CircleAvatar(child:Icon(Icons.menu_book)),title:Text((item['name_ar']??item['name_en']??'مادة') as String),subtitle:Text((item['description']??item['code']??'') as String),trailing:const Icon(Icons.chevron_left),onTap:()=>Navigator.push(c,MaterialPageRoute(builder:(_)=>SubjectDetailPage(subject:item)))));}
 class SubjectDetailPage extends StatelessWidget {
   final Map<String, dynamic> subject;
