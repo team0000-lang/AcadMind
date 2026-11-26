@@ -82,35 +82,52 @@ class SplashGate extends StatefulWidget {
   State<SplashGate> createState() => _SplashGateState();
 }
 
-class _SplashGateState extends State<SplashGate> with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 1500))..forward();
-  late final Animation<double> _scale = CurvedAnimation(parent: _controller, curve: Curves.elasticOut);
-  late final Animation<double> _fade = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
+class _SplashGateState extends State<SplashGate> with TickerProviderStateMixin {
+  late final AnimationController _intro = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1500),
+  )..forward();
+  late final AnimationController _typing = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1450),
+  )..forward();
+  late final Animation<double> _fade = CurvedAnimation(parent: _intro, curve: Curves.easeOut);
+  late final Animation<double> _scale = CurvedAnimation(parent: _intro, curve: Curves.easeOutBack);
+  bool _showMark = false;
   bool _finished = false;
 
   @override
   void initState() {
     super.initState();
-    _finishSplash();
+    _runIntro();
   }
 
-  Future<void> _finishSplash() async {
-    await Future<void>.delayed(const Duration(milliseconds: 2450));
+  Future<void> _runIntro() async {
+    await Future<void>.delayed(const Duration(milliseconds: 1900));
+    if (!mounted) return;
+    setState(() => _showMark = true);
+    await Future<void>.delayed(const Duration(milliseconds: 1350));
     if (mounted) setState(() => _finished = true);
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _intro.dispose();
+    _typing.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     if (_finished) {
+      // Supabase restores its persisted session during initialize(); only show
+      // authentication when there is genuinely no active session.
       return StreamBuilder<AuthState>(
         stream: supabase.auth.onAuthStateChange,
-        builder: (context, snapshot) => supabase.auth.currentSession == null ? const AuthScreen() : const HomeScreen(),
+        builder: (context, snapshot) {
+          final session = snapshot.data?.session ?? supabase.auth.currentSession;
+          return session == null ? const AuthScreen() : const HomeScreen();
+        },
       );
     }
 
@@ -122,7 +139,7 @@ class _SplashGateState extends State<SplashGate> with SingleTickerProviderStateM
           gradient: LinearGradient(
             begin: Alignment.topRight,
             end: Alignment.bottomLeft,
-            colors: [Color(0xFF171B49), Color(0xFF3932A4), Color(0xFF7768FF)],
+            colors: [Color(0xFF10133B), Color(0xFF30258E), Color(0xFF6658F5)],
           ),
         ),
         child: Stack(
@@ -137,30 +154,89 @@ class _SplashGateState extends State<SplashGate> with SingleTickerProviderStateM
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Container(
-                        width: 112,
-                        height: 112,
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 650),
+                        curve: Curves.easeInOutCubic,
+                        width: _showMark ? 116 : 96,
+                        height: _showMark ? 116 : 96,
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: .13),
-                          borderRadius: BorderRadius.circular(34),
-                          border: Border.all(color: Colors.white.withValues(alpha: .28)),
-                          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: .12), blurRadius: 35, offset: const Offset(0, 14))],
+                          gradient: const LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [Color(0xFF9D91FF), Color(0xFF4B43D0), Color(0xFF13C8F2)],
+                          ),
+                          borderRadius: BorderRadius.circular(_showMark ? 36 : 30),
+                          border: Border.all(color: Colors.white.withValues(alpha: .32), width: 1.2),
+                          boxShadow: [
+                            BoxShadow(color: const Color(0xFF8D83FF).withValues(alpha: .30), blurRadius: 42, offset: const Offset(0, 16)),
+                          ],
                         ),
                         alignment: Alignment.center,
-                        child: const Text('AM', style: TextStyle(color: Colors.white, fontSize: 43, fontWeight: FontWeight.w900, letterSpacing: 2)),
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 520),
+                          switchInCurve: Curves.easeOutBack,
+                          switchOutCurve: Curves.easeIn,
+                          transitionBuilder: (child, animation) => FadeTransition(
+                            opacity: animation,
+                            child: ScaleTransition(scale: animation, child: child),
+                          ),
+                          child: _showMark
+                              ? const Text('AM', key: ValueKey('am-mark'), style: TextStyle(color: Colors.white, fontSize: 42, fontWeight: FontWeight.w900, letterSpacing: 1.5))
+                              : const Icon(Icons.auto_awesome_rounded, key: ValueKey('intro-mark'), color: Colors.white, size: 43),
+                        ),
                       ),
-                      const SizedBox(height: 25),
-                      const Text('AcadMind', style: TextStyle(color: Colors.white, fontSize: 35, fontWeight: FontWeight.w900, letterSpacing: .3)),
-                      const SizedBox(height: 8),
-                      Text('ذاكر أذكى. أنجز أسرع.', style: TextStyle(color: Colors.white.withValues(alpha: .78), fontSize: 15, fontWeight: FontWeight.w500)),
-                      const SizedBox(height: 38),
-                      SizedBox(width: 30, height: 30, child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white.withValues(alpha: .85))),
+                      const SizedBox(height: 27),
+                      SizedBox(
+                        height: 49,
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 520),
+                          switchInCurve: Curves.easeOutBack,
+                          transitionBuilder: (child, animation) => FadeTransition(
+                            opacity: animation,
+                            child: SlideTransition(
+                              position: Tween<Offset>(begin: const Offset(0, .22), end: Offset.zero).animate(animation),
+                              child: child,
+                            ),
+                          ),
+                          child: _showMark
+                              ? const Text('AM', key: ValueKey('short-name'), style: TextStyle(color: Colors.white, fontSize: 38, fontWeight: FontWeight.w900, letterSpacing: 5))
+                              : AnimatedBuilder(
+                                  key: const ValueKey('full-name'),
+                                  animation: _typing,
+                                  builder: (context, _) {
+                                    const name = 'AcadMind';
+                                    final count = (_typing.value * name.length).ceil().clamp(0, name.length);
+                                    return Text(
+                                      name.substring(0, count),
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.w900, letterSpacing: .2),
+                                    );
+                                  },
+                                ),
+                        ),
+                      ),
+                      const SizedBox(height: 9),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 350),
+                        child: Text(
+                          _showMark ? 'YOUR SMART ACADEMIC COMPANION' : 'ذاكر أذكى. أنجز أسرع.',
+                          key: ValueKey(_showMark),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.white.withValues(alpha: .76), fontSize: _showMark ? 9 : 15, fontWeight: FontWeight.w600, letterSpacing: _showMark ? 2.0 : .2),
+                        ),
+                      ),
+                      const SizedBox(height: 37),
+                      SizedBox(
+                        width: 26,
+                        height: 26,
+                        child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white.withValues(alpha: .82)),
+                      ),
                     ],
                   ),
                 ),
               ),
             ),
-            Positioned(bottom: 30, left: 0, right: 0, child: Text('YOUR SMART ACADEMIC COMPANION', textAlign: TextAlign.center, style: TextStyle(color: Colors.white.withValues(alpha: .48), fontSize: 9, letterSpacing: 2.2, fontWeight: FontWeight.w700))),
+            Positioned(bottom: 30, left: 0, right: 0, child: Text('LEARN • FOCUS • ACHIEVE', textAlign: TextAlign.center, style: TextStyle(color: Colors.white.withValues(alpha: .40), fontSize: 9, letterSpacing: 2.8, fontWeight: FontWeight.w700))),
           ],
         ),
       ),
