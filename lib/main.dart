@@ -3,7 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'backend.dart';
 import 'screens/auth_screen.dart';
-import 'screens/home_screen.dart';
+import 'screens/post_login_gate.dart';
 import 'app_preferences.dart';
 
 const supabaseUrl = String.fromEnvironment('SUPABASE_URL', defaultValue: 'https://skpjvgzxoholaapymvwd.supabase.co');
@@ -126,7 +126,7 @@ class _SplashGateState extends State<SplashGate> with TickerProviderStateMixin {
         stream: supabase.auth.onAuthStateChange,
         builder: (context, snapshot) {
           final session = snapshot.data?.session ?? supabase.auth.currentSession;
-          return session == null ? const AuthScreen() : const HomeScreen();
+          return session == null ? const AuthScreen() : const PostLoginGate();
         },
       );
     }
