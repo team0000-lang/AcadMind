@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -104,10 +106,19 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
   final controller=TextEditingController();
   bool busy=false;
   String? answer;
+  PlatformFile? pdfFile;
   @override void dispose(){controller.dispose();super.dispose();}
+  Future<void> pickPdf() async {
+    final result=await FilePicker.platform.pickFiles(type:FileType.custom,allowedExtensions:['pdf'],withData:true);
+    if(result==null)return;
+    final file=result.files.single;
+    if(file.size>15*1024*1024){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('الحد الأقصى لملف PDF هو 15 ميجابايت')));return;}
+    if(file.bytes==null){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('تعذر قراءة الملف، حاول مرة أخرى')));return;}
+    setState(()=>pdfFile=file);
+  }
   Future<void> generate()async{
     final value=controller.text.trim();
-    if(value.isEmpty){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('اكتب المحتوى أو التفاصيل أولاً')));return;}
+    if(value.isEmpty && !(widget.tool.title=='PDF Analyzer' && pdfFile!=null)){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('اكتب المحتوى أو اختر ملف PDF أولاً')));return;}
     setState(()=>busy=true);
     try{
       final task = switch (widget.tool.title) {
@@ -122,9 +133,12 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
         _ => 'chat',
       };
       final result=await supabase.functions.invoke('ai-chat',body:{
-        'question':'${widget.tool.prompt}\n\nمدخلات الطالب:\n$value',
+        'question':'${widget.tool.prompt}\n\nمدخلات الطالب:\n${value.isEmpty?'حلل الملف المرفق بالكامل واستخرج أهم النقاط والأسئلة.':value}',
         'task':task,
         'retrieve':false,
+        if(widget.tool.title=='PDF Analyzer' && pdfFile!=null) 'fileBase64':base64Encode(pdfFile!.bytes!),
+        if(widget.tool.title=='PDF Analyzer' && pdfFile!=null) 'fileMimeType':'application/pdf',
+        if(widget.tool.title=='PDF Analyzer' && pdfFile!=null) 'fileName':pdfFile!.name,
       });
       final data=Map<String,dynamic>.from(result.data as Map);
       final text=(data['answer']??data['error']??'لم يصل رد من المساعد.').toString();
@@ -145,6 +159,11 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
         Text(widget.tool.title=='PDF Analyzer'?'محتوى ملف PDF':'المحتوى أو التفاصيل',style:const TextStyle(fontWeight:FontWeight.w800,fontSize:14)),
         const SizedBox(height:8),
         TextField(controller:controller,minLines:7,maxLines:14,textDirection:TextDirection.rtl,decoration:InputDecoration(hintText:widget.tool.hint,alignLabelWithHint:true)),
+        if(widget.tool.title=='PDF Analyzer')...[
+          const SizedBox(height:10),
+          OutlinedButton.icon(onPressed:busy?null:pickPdf,icon:const Icon(Icons.upload_file_rounded),label:Text(pdfFile==null?'اختيار ملف PDF':'تغيير الملف: ${pdfFile!.name}')),
+          if(pdfFile!=null) Text('تم اختيار ${pdfFile!.name} • ${(pdfFile!.size/1024/1024).toStringAsFixed(1)} MB',style:TextStyle(color:colors.onSurfaceVariant,fontSize:11)),
+        ],
         const SizedBox(height:12),
         SizedBox(height:50,child:FilledButton.icon(onPressed:busy?null:generate,icon:busy?const SizedBox(width:18,height:18,child:CircularProgressIndicator(strokeWidth:2,color:Colors.white)):const Icon(Icons.auto_awesome_rounded),label:Text(busy?'جاري التحليل...':'ابدأ الآن'),style:FilledButton.styleFrom(shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(16))))),
         if(answer!=null)...[
