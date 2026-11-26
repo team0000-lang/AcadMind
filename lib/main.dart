@@ -125,7 +125,8 @@ class _SplashGateState extends State<SplashGate> with TickerProviderStateMixin {
       return StreamBuilder<AuthState>(
         stream: supabase.auth.onAuthStateChange,
         builder: (context, snapshot) {
-          final session = snapshot.data?.session ?? supabase.auth.currentSession;
+          final authState = snapshot.data;
+          final session = authState == null ? supabase.auth.currentSession : authState.session;
           return session == null ? const AuthScreen() : const PostLoginGate();
         },
       );
