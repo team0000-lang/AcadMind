@@ -42,7 +42,7 @@ class _StudyLibraryPageState extends State<StudyLibraryPage> {
           const SizedBox(height:8),
           Text('${filters[item['item_type']]??'محتوى محفوظ'} • ${item['subjects'] is Map ? (item['subjects']['name_en']??'') : ''}',style:TextStyle(color:Theme.of(ctx).colorScheme.onSurfaceVariant,fontSize:11)),
           const Divider(height:24),
-          Flexible(child:SingleChildScrollView(child:MarkdownBody(data:'${item['content']}',selectable:true))),
+          ConstrainedBox(constraints:BoxConstraints(maxHeight:MediaQuery.of(ctx).size.height*.62),child:SingleChildScrollView(child:MarkdownBody(data:'${item['content']}',selectable:true))),
         ]),
       )));
   }
