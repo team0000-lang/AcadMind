@@ -160,6 +160,11 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
   bool revealPractice=false;
   int practiceScore=0;
   bool practiceSaved=false;
+  String pdfDepth='Standard';
+  String summaryMode='Study Notes';
+  String explainerLevel='University';
+  String quizDifficulty='Medium';
+  int quizCount=8;
   PlatformFile? pdfFile;
   @override void initState(){super.initState();loadSubjects();}
   Future<void> loadSubjects() async {
@@ -172,6 +177,16 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
     } finally { if(mounted)setState(()=>loadingSubjects=false); }
   }
   @override void dispose(){controller.dispose();super.dispose();}
+  String _toolSettingsPrompt() {
+    return switch(widget.tool.title){
+      'PDF Analyzer' => '\\nAnalysis depth: $pdfDepth. ${pdfDepth=='Quick'?'Give a concise overview.':pdfDepth=='Deep'?'Provide a detailed section-by-section analysis, concepts, definitions, formulas, pitfalls, and revision questions.':'Provide a balanced analysis with key concepts, definitions, and revision points.'}',
+      'Smart Summarizer' => '\\nSummary format: $summaryMode. ${summaryMode=='Quick Summary'?'Keep it concise and prioritize the core ideas.':summaryMode=='Exam Revision'?'Focus on likely exam points, formulas, definitions, comparisons, and common mistakes.':'Create structured study notes with headings, examples, and key terms.'}',
+      'AI Explainer' => '\\nExplanation level: $explainerLevel. ${explainerLevel=='Beginner'?'Assume no prior knowledge and explain from the basics.':explainerLevel=='Advanced'?'Use university-level depth, precise terminology, and rigorous reasoning.':'Explain at a standard university undergraduate level.'} End with two comprehension questions.',
+      'Quiz Generator' => '\\nGenerate exactly $quizCount questions. Difficulty: $quizDifficulty.',
+      _ => '',
+    };
+  }
+
   Future<String> _realContext(String task) async {
     final since=DateTime.now().subtract(const Duration(days:30)).toUtc().toIso8601String();
     if(task=='planner'){
@@ -239,7 +254,7 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
       final result=await supabase.functions.invoke('ai-chat',
         headers:{'Authorization':'Bearer ${session.accessToken}'},
         body:{
-        'question':'${widget.tool.prompt}\n\nمدخلات الطالب:\n${value.isEmpty?'حلل الملف المرفق بالكامل واستخرج أهم النقاط والأسئلة.':value}${task=='quiz'?'\nأخرج JSON صالحاً فقط بلا Markdown وفق schema: {"title":"...","questions":[{"question":"...","options":["A","B","C","D"],"answer":"النص المطابق لأحد الخيارات","explanation":"..."}]} مع 8 أسئلة.':task=='flashcards'?'\nأخرج JSON صالحاً فقط بلا Markdown وفق schema: {"title":"...","cards":[{"front":"سؤال","back":"إجابة"}]} مع 12 بطاقة.':''}${await _realContext(task)}',
+        'question':'${widget.tool.prompt}\n\nمدخلات الطالب:\n${value.isEmpty?'حلل الملف المرفق بالكامل واستخرج أهم النقاط والأسئلة.':value}${task=='quiz'?'\nأخرج JSON صالحاً فقط بلا Markdown وفق schema: {"title":"...","questions":[{"question":"...","options":["A","B","C","D"],"answer":"النص المطابق لأحد الخيارات","explanation":"..."}]} مع العدد والصعوبة المحددين.':task=='flashcards'?'\nأخرج JSON صالحاً فقط بلا Markdown وفق schema: {"title":"...","cards":[{"front":"سؤال","back":"إجابة"}]} مع 12 بطاقة.':''}${_toolSettingsPrompt()}${await _realContext(task)}',
         'task':task,
         'subjectId':subjectId,
         'retrieve':subjectId!=null,
@@ -375,6 +390,10 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
         ),
         if(loadingSubjects) const Padding(padding:EdgeInsets.only(top:8),child:LinearProgressIndicator()),
         if(!loadingSubjects && subjects.isEmpty) const Padding(padding:EdgeInsets.only(top:8),child:Text('لا توجد مواد متاحة أو تعذر تحميلها. يمكنك المحاولة لاحقاً.',style:TextStyle(fontSize:11))),
+        if(widget.tool.title=='PDF Analyzer') DropdownButtonFormField<String>(value:pdfDepth,decoration:const InputDecoration(labelText:'عمق التحليل'),items:const [DropdownMenuItem(value:'Quick',child:Text('Quick • سريع')),DropdownMenuItem(value:'Standard',child:Text('Standard • متوازن')),DropdownMenuItem(value:'Deep',child:Text('Deep • تفصيلي'))],onChanged:busy?null:(v)=>setState(()=>pdfDepth=v??pdfDepth)),
+        if(widget.tool.title=='Smart Summarizer') DropdownButtonFormField<String>(value:summaryMode,decoration:const InputDecoration(labelText:'نمط التلخيص'),items:const [DropdownMenuItem(value:'Quick Summary',child:Text('Quick Summary')),DropdownMenuItem(value:'Study Notes',child:Text('Study Notes')),DropdownMenuItem(value:'Exam Revision',child:Text('Exam Revision'))],onChanged:busy?null:(v)=>setState(()=>summaryMode=v??summaryMode)),
+        if(widget.tool.title=='AI Explainer') DropdownButtonFormField<String>(value:explainerLevel,decoration:const InputDecoration(labelText:'مستوى الشرح'),items:const [DropdownMenuItem(value:'Beginner',child:Text('Beginner • مبتدئ')),DropdownMenuItem(value:'University',child:Text('University • جامعي')),DropdownMenuItem(value:'Advanced',child:Text('Advanced • متقدم'))],onChanged:busy?null:(v)=>setState(()=>explainerLevel=v??explainerLevel)),
+        if(widget.tool.title=='Quiz Generator') Row(children:[Expanded(child:DropdownButtonFormField<int>(value:quizCount,decoration:const InputDecoration(labelText:'عدد الأسئلة'),items:const [DropdownMenuItem(value:5,child:Text('5')),DropdownMenuItem(value:8,child:Text('8')),DropdownMenuItem(value:10,child:Text('10')),DropdownMenuItem(value:15,child:Text('15'))],onChanged:busy?null:(v)=>setState(()=>quizCount=v??quizCount))),const SizedBox(width:10),Expanded(child:DropdownButtonFormField<String>(value:quizDifficulty,decoration:const InputDecoration(labelText:'الصعوبة'),items:const [DropdownMenuItem(value:'Easy',child:Text('Easy')),DropdownMenuItem(value:'Medium',child:Text('Medium')),DropdownMenuItem(value:'Hard',child:Text('Hard'))],onChanged:busy?null:(v)=>setState(()=>quizDifficulty=v??quizDifficulty)))]),
         const SizedBox(height:14),
         Text(widget.tool.title=='PDF Analyzer'?'محتوى ملف PDF':'المحتوى أو التفاصيل',style:const TextStyle(fontWeight:FontWeight.w800,fontSize:14)),
         const SizedBox(height:8),
