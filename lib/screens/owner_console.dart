@@ -1290,6 +1290,15 @@ Future<void> _scheduleForm(BuildContext context, VoidCallback done,
   teacher.dispose();
 }
 
+String _knowledgeStatusLabel(dynamic status) => switch (status) {
+  'uploaded' => 'تم الرفع - في انتظار المعالجة',
+  'processing' => 'جاري التحليل',
+  'ready' => 'جاهز للمساعد',
+  'failed' => 'فشل التحليل',
+  'archived' => 'مؤرشف',
+  _ => '${status ?? 'غير معروف'}',
+};
+
 class KnowledgeAdmin extends StatefulWidget {
   final VoidCallback onChanged;
   const KnowledgeAdmin({super.key, required this.onChanged});
@@ -1406,19 +1415,42 @@ class _KnowledgeAdminState extends State<KnowledgeAdmin> {
           .single();
       final newDocId = '${doc['id']}';
       docId = newDocId;
-      await supabase.functions.invoke('ingest-knowledge',
-          headers: {'Authorization': 'Bearer ${session.accessToken}'},
-          body: {'documentId': newDocId});
-      if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('تم رفع الملف وتجهيزه للمساعد الذكي')));
+      final ingestResponse = await supabase.functions.invoke(
+        'ingest-knowledge',
+        headers: {'Authorization': 'Bearer ${session.accessToken}'},
+        body: {'documentId': newDocId},
+      );
+      final ingestData = ingestResponse.data is Map
+          ? Map<String, dynamic>.from(ingestResponse.data as Map)
+          : <String, dynamic>{};
+      if (ingestResponse.status < 200 || ingestResponse.status >= 300) {
+        throw Exception(
+          '${ingestData['detail'] ?? ingestData['error'] ?? 'فشل تجهيز الملف'}'
+          '${ingestData['stage'] == null ? '' : ' • المرحلة: ${ingestData['stage']}'}'
+          ' • HTTP ${ingestResponse.status}',
+        );
+      }
+      if (ingestData['status'] != 'ready' ||
+          (ingestData['chunks'] as num? ?? 0) < 1) {
+        throw Exception(
+          ingestData['detail'] ?? 'لم يتم إنشاء مقاطع معرفة قابلة للبحث.',
+        );
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+            'تم تجهيز الملف بنجاح • ${ingestData['chunks']} مقطع'
+            '${ingestData['pageCount'] == null ? '' : ' • ${ingestData['pageCount']} صفحة'}',
+          ),
+        ));
+      }
       reload();
     } catch (e) {
       if (docId != null) {
         try {
-          await supabase
-              .from('knowledge_documents')
-              .update({'status': 'failed'}).eq('id', docId);
+          await supabase.from('knowledge_documents').update({
+            'status': 'failed',
+          }).eq('id', docId);
         } catch (_) {}
       }
       if (mounted) {
@@ -1534,7 +1566,10 @@ class _KnowledgeAdminState extends State<KnowledgeAdmin> {
                   leading: const Icon(Icons.description_outlined),
                   title: Text('${x['document_name']}'),
                   subtitle: Text(
-                      '${(x['subjects'] is Map) ? x['subjects']['name_en'] : ''} • ${x['status']}'),
+                      '${(x['subjects'] is Map) ? x['subjects']['name_en'] : ''} • ${_knowledgeStatusLabel(x['status'])}'
+                      '${x['page_count'] == null ? '' : ' • ${x['page_count']} صفحة'}'
+                      '${(x['metadata'] is Map && x['metadata']['chunk_count'] != null) ? ' • ${x['metadata']['chunk_count']} مقطع' : ''}'
+                      '${(x['metadata'] is Map && x['metadata']['last_error'] != null) ? '\\nسبب الفشل: ${x['metadata']['last_error']}' : ''}'),
                   trailing: PopupMenuButton<String>(
                       onSelected: (action) async {
                         if (action == 'test') await testDocument(x);
