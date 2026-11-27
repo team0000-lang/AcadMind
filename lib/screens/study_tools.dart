@@ -162,11 +162,11 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
     if(task=='planner'){
       final results=await Future.wait([
         supabase.from('academic_events').select('title,event_type,starts_at,subjects(name_en)').eq('is_active',true).gte('starts_at',DateTime.now().toUtc().toIso8601String()).order('starts_at').limit(60),
-        supabase.from('schedules').select('*').eq('is_active',true).isFilter('deleted_at',null).limit(100),
+        AcadMindData.schedule(),
       ]);
       final events=List<Map<String,dynamic>>.from(results[0]);
       final schedule=List<Map<String,dynamic>>.from(results[1]);
-      return '\\n\\nالامتحانات والمهام والأحداث المسجلة القادمة (لا تخترع مواعيد):\\n${events.map((e)=>'${e['title']} | ${e['event_type']} | ${e['starts_at']} | ${e['subjects'] is Map ? e['subjects']['name_en'] : ''}').join('\\n')}\\n\\nجدول المحاضرات الأسبوعي المسجل: ${schedule.take(60).map((e)=>e.entries.map((v)=>'${v.key}: ${v.value}').join(', ')).join('\\n')}';
+      return '\\n\\nالامتحانات والمهام والأحداث المسجلة القادمة (لا تخترع مواعيد):\\n${events.map((e)=>'${e['title']} | ${e['event_type']} | ${e['starts_at']} | ${e['subjects'] is Map ? e['subjects']['name_en'] : ''}').join('\\n')}\\n\\nجدول المحاضرات الأسبوعي المسجل: ${schedule.take(60).map((e)=>'${e['subjects'] is Map ? e['subjects']['name_en'] : 'محاضرة'} | اليوم ${e['day_of_week']} | ${e['starts_at']} - ${e['ends_at']} | ${e['location']??''}').join('\\n')}';
     }
     if(task=='analytics'){
       final results=await Future.wait([
