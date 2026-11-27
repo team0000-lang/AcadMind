@@ -109,6 +109,7 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
   String? answer;
   String? subjectId;
   List<Map<String,dynamic>> subjects=[];
+  List<Map<String,dynamic>> sources=[];
   PlatformFile? pdfFile;
   @override void initState(){super.initState();loadSubjects();}
   Future<void> loadSubjects() async {
@@ -138,7 +139,7 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
       setState(()=>answer='جلسة الدخول غير موجودة. سجّل الدخول مرة أخرى لاستخدام أدوات الذكاء الاصطناعي.');
       return;
     }
-    setState(()=>busy=true);
+    setState(()=>{busy=true,answer=null,sources=[]});
     try{
       final task = switch (widget.tool.title) {
         'AI Study Assistant' => 'chat',
@@ -164,7 +165,8 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
       });
       final data=Map<String,dynamic>.from(result.data as Map);
       final text=(data['answer']??data['error']??'لم يصل رد من المساعد.').toString();
-      if(mounted)setState(()=>answer=text);
+      final retrieved=data['sources'] is List ? List<Map<String,dynamic>>.from((data['sources'] as List).whereType<Map>().map((e)=>Map<String,dynamic>.from(e))) : <Map<String,dynamic>>[];
+      if(mounted)setState(()=>{answer=text,sources=retrieved});
     }on FunctionException catch(e){
       final detail=e.details is Map
           ? ((e.details as Map)['error']??(e.details as Map)['message']??'').toString()
@@ -210,6 +212,18 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
           const SizedBox(height:22),
           Row(children:[const Expanded(child:Text('النتيجة',style:TextStyle(fontWeight:FontWeight.w900,fontSize:18))),IconButton(onPressed:()=>setState(()=>answer=null),icon:const Icon(Icons.close_rounded))]),
           Container(padding:const EdgeInsets.all(16),decoration:BoxDecoration(color:Theme.of(context).cardColor,borderRadius:BorderRadius.circular(20),border:Border.all(color:colors.outlineVariant.withValues(alpha:.6))),child:MarkdownBody(data:answer!,selectable:true,styleSheet:MarkdownStyleSheet.fromTheme(Theme.of(context)))),
+          if(sources.isNotEmpty)...[
+            const SizedBox(height:12),
+            const Text('المصادر المستخدمة',style:TextStyle(fontWeight:FontWeight.w900,fontSize:13)),
+            const SizedBox(height:6),
+            ...sources.map((source)=>ListTile(
+              dense:true,
+              contentPadding:const EdgeInsets.symmetric(horizontal:10),
+              leading:const Icon(Icons.menu_book_rounded,size:18),
+              title:Text('${source['documentName']??'Course document'}',style:const TextStyle(fontSize:12,fontWeight:FontWeight.w700)),
+              subtitle:Text('صفحة ${source['page']??'غير محددة'}',style:TextStyle(fontSize:10,color:colors.onSurfaceVariant)),
+            )),
+          ],
         ],
       ]),
     );
