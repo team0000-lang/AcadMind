@@ -78,6 +78,12 @@ class _HomeScreenState extends State<HomeScreen> {
         2,
       ),
       _HomeNavItem(
+        Icons.auto_awesome_rounded,
+        Icons.auto_awesome_rounded,
+        'أدوات ذكية',
+        6,
+      ),
+      _HomeNavItem(
         Icons.psychology_alt_rounded,
         Icons.psychology_alt_rounded,
         'AI',
