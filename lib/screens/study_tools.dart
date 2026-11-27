@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../backend.dart';
+import 'study_library.dart';
 
 class _StudyTool {
   final String title, subtitle, prompt, hint;
@@ -46,7 +48,11 @@ class StudyToolsPage extends StatelessWidget {
             Text('مجموعة أدوات ذكية تساعدك تفهم، تلخّص، تتدرّب وتنظّم وقتك.',style:TextStyle(color:Colors.white70,fontSize:12,height:1.6)),
           ]),
         ),
-        const SizedBox(height:24),
+        const SizedBox(height:16),
+        const StudySessionCard(),
+        const SizedBox(height:12),
+        OutlinedButton.icon(onPressed:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>const StudyLibraryPage())),icon:const Icon(Icons.bookmarks_rounded),label:const Text('افتح مكتبتي الدراسية'),style:OutlinedButton.styleFrom(minimumSize:const Size.fromHeight(48),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(15)))),
+        const SizedBox(height:22),
         Row(children:[const Expanded(child:Text('كل أدواتك في مكان واحد',style:TextStyle(fontSize:18,fontWeight:FontWeight.w900))),Text('8 TOOLS',style:TextStyle(color:colors.onSurfaceVariant,fontSize:10,fontWeight:FontWeight.w800,letterSpacing:1))]),
         const SizedBox(height:13),
         GridView.builder(
@@ -64,6 +70,30 @@ class StudyToolsPage extends StatelessWidget {
       ],
     );
   }
+}
+
+class StudySessionCard extends StatefulWidget {
+  const StudySessionCard({super.key});
+  @override State<StudySessionCard> createState()=>_StudySessionCardState();
+}
+class _StudySessionCardState extends State<StudySessionCard>{
+  final Stopwatch watch=Stopwatch();
+  final TextEditingController title=TextEditingController(text:'جلسة مذاكرة');
+  Timer? ticker;
+  String elapsed='00:00:00';
+  bool saving=false;
+  void tick(){final d=watch.elapsed;if(mounted)setState(()=>elapsed='${d.inHours.toString().padLeft(2,'0')}:${(d.inMinutes%60).toString().padLeft(2,'0')}:${(d.inSeconds%60).toString().padLeft(2,'0')}');}
+  void start(){watch.start();ticker=Timer.periodic(const Duration(seconds:1),(_)=>tick());setState((){});}
+  Future<void> stopAndSave() async {
+    watch.stop();ticker?.cancel();final minutes=(watch.elapsed.inSeconds/60).ceil();
+    if(minutes<1){watch.reset();tick();setState((){});return;}
+    setState(()=>saving=true);
+    try{await supabase.from('study_sessions').insert({'user_id':supabase.auth.currentUser!.id,'title':title.text.trim().isEmpty?'جلسة مذاكرة':title.text.trim(),'started_at':DateTime.now().subtract(watch.elapsed).toUtc().toIso8601String(),'duration_minutes':minutes});if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('تم حفظ جلسة مذاكرة لمدة $minutes دقيقة')));watch.reset();tick();}
+    catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('تعذر حفظ الجلسة: $e')));}
+    finally{if(mounted)setState(()=>saving=false);}
+  }
+  @override void dispose(){ticker?.cancel();title.dispose();super.dispose();}
+  @override Widget build(BuildContext context){final colors=Theme.of(context).colorScheme;final running=watch.isRunning;return Container(padding:const EdgeInsets.all(16),decoration:BoxDecoration(color:colors.primaryContainer.withValues(alpha:.42),borderRadius:BorderRadius.circular(22),border:Border.all(color:colors.primary.withValues(alpha:.12))),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Row(children:[Icon(Icons.timer_rounded,color:colors.primary),const SizedBox(width:8),const Expanded(child:Text('جلسة مذاكرة مركّزة',style:TextStyle(fontWeight:FontWeight.w900,fontSize:15))),Text(elapsed,style:const TextStyle(fontWeight:FontWeight.w900,fontSize:18))]),const SizedBox(height:8),TextField(controller:title,enabled:!running&&!saving,decoration:const InputDecoration(isDense:true,labelText:'اسم الجلسة',prefixIcon:Icon(Icons.edit_note_rounded))),const SizedBox(height:12),Row(children:[Expanded(child:FilledButton.icon(onPressed:running||saving?null:start,icon:const Icon(Icons.play_arrow_rounded),label:const Text('ابدأ'))),const SizedBox(width:8),Expanded(child:OutlinedButton.icon(onPressed:running&&!saving?stopAndSave:null,icon:saving?const SizedBox(width:16,height:16,child:CircularProgressIndicator(strokeWidth:2)):const Icon(Icons.stop_rounded),label:const Text('إنهاء وحفظ')))])]));}
 }
 
 class _ToolCard extends StatelessWidget {
@@ -122,6 +152,35 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
     } finally { if(mounted)setState(()=>loadingSubjects=false); }
   }
   @override void dispose(){controller.dispose();super.dispose();}
+  Future<String> _realContext(String task) async {
+    final since=DateTime.now().subtract(const Duration(days:30)).toUtc().toIso8601String();
+    if(task=='planner'){
+      final events=await supabase.from('academic_events').select('title,event_type,starts_at,subjects(name_en)').eq('is_active',true).gte('starts_at',DateTime.now().toUtc().toIso8601String()).order('starts_at').limit(60);
+      return '\\n\\nمواعيد الطالب المسجلة القادمة (لا تخترع مواعيد):\\n${events.map((e)=>'${e['title']} | ${e['event_type']} | ${e['starts_at']} | ${e['subjects'] is Map ? e['subjects']['name_en'] : ''}').join('\\n')}';
+    }
+    if(task=='analytics'){
+      final results=await Future.wait([
+        supabase.from('study_sessions').select('title,duration_minutes,started_at,subjects(name_en)').gte('started_at',since).order('started_at',ascending:false).limit(200),
+        supabase.from('quiz_attempts').select('title,score,max_score,created_at,subjects(name_en)').gte('created_at',since).order('created_at',ascending:false).limit(100),
+        supabase.from('assignment_progress').select('status,updated_at').limit(200),
+      ]);
+      final sessions=List<Map<String,dynamic>>.from(results[0]);final quizzes=List<Map<String,dynamic>>.from(results[1]);final assignments=List<Map<String,dynamic>>.from(results[2]);
+      final minutes=sessions.fold<int>(0,(sum,x)=>sum+((x['duration_minutes'] as num?)?.toInt()??0));
+      final completed=assignments.where((x)=>x['status']=='completed').length;
+      final quizAvg=quizzes.isEmpty?null:quizzes.fold<double>(0,(sum,x)=>sum+(((x['score'] as num?)?.toDouble()??0)/((x['max_score'] as num?)?.toDouble()??1)*100))/quizzes.length;
+      return '\\n\\nبيانات التقدم الحقيقية (آخر 30 يوماً):\\nجلسات المذاكرة: ${sessions.length}\\nإجمالي دقائق المذاكرة: $minutes\\nمحاولات الاختبارات: ${quizzes.length}\\nمتوسط الاختبارات: ${quizAvg?.toStringAsFixed(1)??'لا توجد بيانات'}%\\nالواجبات المكتملة: $completed من ${assignments.length}\\nالجلسات: ${sessions.take(30).map((x)=>'${x['title']} • ${x['duration_minutes']} دقيقة').join(' | ')}\\nالاختبارات: ${quizzes.take(30).map((x)=>'${x['title']} • ${x['score']}/${x['max_score']}').join(' | ')}';
+    }
+    return '';
+  }
+  Future<void> saveToLibrary() async {
+    if(answer==null||answer!.trim().isEmpty)return;setState(()=>busy=true);
+    try{
+      final type=switch(widget.tool.title){'PDF Analyzer'=>'analysis','Smart Summarizer'=>'summary','Quiz Generator'=>'quiz','Flashcards'=>'flashcards','AI Explainer'=>'explanation','Study Planner'=>'plan','AI Study Assistant'=>'chat',_=>'note'};
+      await supabase.from('study_library_items').insert({'user_id':supabase.auth.currentUser!.id,'subject_id':subjectId,'item_type':type,'title':'${widget.tool.title} • ${DateTime.now().toLocal().toString().substring(0,16)}','content':answer,'metadata':{'sources':sources}});
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('تم حفظ النتيجة في مكتبتك الدراسية')));
+    }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('تعذر حفظ النتيجة: $e')));}
+    finally{if(mounted)setState(()=>busy=false);}
+  }
   Future<void> pickPdf() async {
     final result=await FilePicker.platform.pickFiles(type:FileType.custom,allowedExtensions:['pdf'],withData:true);
     if(result==null)return;
@@ -155,7 +214,7 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
       final result=await supabase.functions.invoke('ai-chat',
         headers:{'Authorization':'Bearer ${session.accessToken}'},
         body:{
-        'question':'${widget.tool.prompt}\n\nمدخلات الطالب:\n${value.isEmpty?'حلل الملف المرفق بالكامل واستخرج أهم النقاط والأسئلة.':value}',
+        'question':'${widget.tool.prompt}\n\nمدخلات الطالب:\n${value.isEmpty?'حلل الملف المرفق بالكامل واستخرج أهم النقاط والأسئلة.':value}${await _realContext(task)}',
         'task':task,
         'subjectId':subjectId,
         'retrieve':subjectId!=null,
@@ -210,7 +269,7 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
         SizedBox(height:50,child:FilledButton.icon(onPressed:busy?null:generate,icon:busy?const SizedBox(width:18,height:18,child:CircularProgressIndicator(strokeWidth:2,color:Colors.white)):const Icon(Icons.auto_awesome_rounded),label:Text(busy?'جاري التحليل...':'ابدأ الآن'),style:FilledButton.styleFrom(shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(16))))),
         if(answer!=null)...[
           const SizedBox(height:22),
-          Row(children:[const Expanded(child:Text('النتيجة',style:TextStyle(fontWeight:FontWeight.w900,fontSize:18))),IconButton(onPressed:()=>setState(()=>answer=null),icon:const Icon(Icons.close_rounded))]),
+          Row(children:[const Expanded(child:Text('النتيجة',style:TextStyle(fontWeight:FontWeight.w900,fontSize:18))),IconButton(tooltip:'حفظ في مكتبتي',onPressed:busy?null:saveToLibrary,icon:const Icon(Icons.bookmark_add_rounded)),IconButton(onPressed:()=>setState(()=>answer=null),icon:const Icon(Icons.close_rounded))]),
           Container(padding:const EdgeInsets.all(16),decoration:BoxDecoration(color:Theme.of(context).cardColor,borderRadius:BorderRadius.circular(20),border:Border.all(color:colors.outlineVariant.withValues(alpha:.6))),child:MarkdownBody(data:answer!,selectable:true,styleSheet:MarkdownStyleSheet.fromTheme(Theme.of(context)))),
           if(sources.isNotEmpty)...[
             const SizedBox(height:12),
