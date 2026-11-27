@@ -248,24 +248,62 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
       if(mounted)setState(()=>answer='حدث خطأ أثناء الاتصال بخدمة الذكاء الاصطناعي. تأكد من الاتصال وإعداد الخدمة ثم حاول مرة أخرى.');
     }finally{if(mounted)setState(()=>busy=false);}
   }
-  Widget _buildInteractiveQuiz(ColorScheme colors){
-    final questions=List<Map<String,dynamic>>.from((practiceData!['questions'] as List).whereType<Map>().map((e)=>Map<String,dynamic>.from(e)));
-    if(questions.isEmpty)return const Text('لم يتم إنشاء أسئلة قابلة للتشغيل.');
-    if(practiceIndex>=questions.length)return Container(padding:const EdgeInsets.all(18),decoration:BoxDecoration(color:colors.primaryContainer,borderRadius:BorderRadius.circular(18)),child:Column(children:[const Icon(Icons.emoji_events_rounded,size:42),const SizedBox(height:8),const Text('انتهى الاختبار',style:TextStyle(fontWeight:FontWeight.w900,fontSize:20)),Text('نتيجتك: $practiceScore / ${questions.length}',style:const TextStyle(fontWeight:FontWeight.w800)),FilledButton(onPressed:()=>setState(()=>{practiceIndex=0,practiceScore=0,selectedAnswer=null,revealPractice=false}),child:const Text('إعادة الاختبار'))]));
-    final q=questions[practiceIndex];final options=List<String>.from(q['options'] is List?q['options']:const []);final correct=(q['answer']??'').toString();
+  Widget _buildInteractiveQuiz(ColorScheme colors) {
+    final questions = List<Map<String,dynamic>>.from(
+      (practiceData!['questions'] as List).whereType<Map>().map((e)=>Map<String,dynamic>.from(e)));
+    if (questions.isEmpty) return const Text('لم يتم إنشاء أسئلة قابلة للتشغيل.');
+    if (practiceIndex >= questions.length) {
+      return Container(padding:const EdgeInsets.all(18),decoration:BoxDecoration(color:colors.primaryContainer,borderRadius:BorderRadius.circular(18)),child:Column(children:[
+        const Icon(Icons.emoji_events_rounded,size:42),const SizedBox(height:8),
+        const Text('انتهى الاختبار',style:TextStyle(fontWeight:FontWeight.w900,fontSize:20)),
+        Text('نتيجتك: $practiceScore / ${questions.length}',style:const TextStyle(fontWeight:FontWeight.w800)),
+        FilledButton(onPressed:()=>setState((){practiceIndex=0;practiceScore=0;selectedAnswer=null;revealPractice=false;}),child:const Text('إعادة الاختبار')),
+      ]));
+    }
+    final q=questions[practiceIndex];
+    final options=List<String>.from(q['options'] is List?q['options']:const []);
+    final correct=(q['answer']??'').toString();
     return Container(padding:const EdgeInsets.all(16),decoration:BoxDecoration(color:Theme.of(context).cardColor,borderRadius:BorderRadius.circular(20),border:Border.all(color:colors.outlineVariant)),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-      Row(children:[Text('سؤال ${practiceIndex+1} من ${questions.length}',style:TextStyle(color:colors.primary,fontWeight:FontWeight.w900)),const Spacer(),Text('النتيجة $practiceScore',style:const TextStyle(fontWeight:FontWeight.w800))]),const SizedBox(height:12),Text('${q['question']??''}',style:const TextStyle(fontSize:16,fontWeight:FontWeight.w800)),const SizedBox(height:12),
-      ...options.map((option){final isCorrect=option.trim().toLowerCase()==correct.trim().toLowerCase();final isSelected=selectedAnswer==option;return Padding(padding:const EdgeInsets.only(bottom:8),child(OutlinedButton(onPressed:revealPractice?null:()=>setState(()=>{selectedAnswer=option,revealPractice=true,if(isCorrect)practiceScore++}),style:OutlinedButton.styleFrom(minimumSize:const Size.fromHeight(46),alignment:Alignment.centerRight,side:BorderSide(color:revealPractice&&isCorrect?Colors.green:revealPractice&&isSelected?Colors.red:colors.outlineVariant)),child:Row(children:[Expanded(child:Text(option)),if(revealPractice&&isCorrect)const Icon(Icons.check_circle,color:Colors.green),if(revealPractice&&isSelected&&!isCorrect)const Icon(Icons.cancel,color:Colors.red)]))));}),
-      if(revealPractice)...[const SizedBox(height:8),Text('الإجابة الصحيحة: $correct',style:const TextStyle(color:Colors.green,fontWeight:FontWeight.w900)),if((q['explanation']??'').toString().isNotEmpty)Padding(padding:const EdgeInsets.only(top:6),child:Text('${q['explanation']}')),
-      const SizedBox(height:12),FilledButton(onPressed:()=>setState(()=>{practiceIndex++,selectedAnswer=null,revealPractice=false}),child:Text(practiceIndex==questions.length-1?'عرض النتيجة':'السؤال التالي'))]
+      Row(children:[Text('سؤال ${practiceIndex+1} من ${questions.length}',style:TextStyle(color:colors.primary,fontWeight:FontWeight.w900)),const Spacer(),Text('النتيجة $practiceScore',style:const TextStyle(fontWeight:FontWeight.w800))]),
+      const SizedBox(height:12),Text('${q['question']??''}',style:const TextStyle(fontSize:16,fontWeight:FontWeight.w800)),const SizedBox(height:12),
+      ...options.map((option){
+        final isCorrect=option.trim().toLowerCase()==correct.trim().toLowerCase();
+        final isSelected=selectedAnswer==option;
+        return Padding(padding:const EdgeInsets.only(bottom:8),child:OutlinedButton(
+          onPressed:revealPractice?null:(){
+            setState((){selectedAnswer=option;revealPractice=true;if(isCorrect)practiceScore++;});
+          },
+          style:OutlinedButton.styleFrom(minimumSize:const Size.fromHeight(46),alignment:Alignment.centerRight,side:BorderSide(color:revealPractice&&isCorrect?Colors.green:revealPractice&&isSelected?Colors.red:colors.outlineVariant)),
+          child:Row(children:[Expanded(child:Text(option)),if(revealPractice&&isCorrect)const Icon(Icons.check_circle,color:Colors.green),if(revealPractice&&isSelected&&!isCorrect)const Icon(Icons.cancel,color:Colors.red)]),
+        ));
+      }),
+      if(revealPractice)...[
+        const SizedBox(height:8),Text('الإجابة الصحيحة: $correct',style:const TextStyle(color:Colors.green,fontWeight:FontWeight.w900)),
+        if((q['explanation']??'').toString().isNotEmpty)Padding(padding:const EdgeInsets.only(top:6),child:Text('${q['explanation']}')),
+        const SizedBox(height:12),
+        FilledButton(onPressed:()=>setState((){practiceIndex++;selectedAnswer=null;revealPractice=false;}),child:Text(practiceIndex==questions.length-1?'عرض النتيجة':'السؤال التالي')),
+      ],
     ]));
   }
-  Widget _buildInteractiveFlashcards(ColorScheme colors){
+
+  Widget _buildInteractiveFlashcards(ColorScheme colors) {
     final cards=List<Map<String,dynamic>>.from((practiceData!['cards'] as List).whereType<Map>().map((e)=>Map<String,dynamic>.from(e)));
     if(cards.isEmpty)return const Text('لم يتم إنشاء بطاقات قابلة للمراجعة.');
-    if(practiceIndex>=cards.length)return Container(padding:const EdgeInsets.all(18),decoration:BoxDecoration(color:colors.primaryContainer,borderRadius:BorderRadius.circular(18)),child:Column(children:[const Icon(Icons.done_all_rounded,size:40),Text('راجعت ${cards.length} بطاقة',style:const TextStyle(fontWeight:FontWeight.w900)),FilledButton(onPressed:()=>setState(()=>{practiceIndex=0,revealPractice=false}),child:const Text('ابدأ من جديد'))]));
+    if(practiceIndex>=cards.length)return Container(padding:const EdgeInsets.all(18),decoration:BoxDecoration(color:colors.primaryContainer,borderRadius:BorderRadius.circular(18)),child:Column(children:[
+      const Icon(Icons.done_all_rounded,size:40),Text('راجعت ${cards.length} بطاقة',style:const TextStyle(fontWeight:FontWeight.w900)),
+      FilledButton(onPressed:()=>setState((){practiceIndex=0;revealPractice=false;}),child:const Text('ابدأ من جديد')),
+    ]));
     final card=cards[practiceIndex];
-    return Column(children:[Text('بطاقة ${practiceIndex+1} من ${cards.length}',style:TextStyle(color:colors.primary,fontWeight:FontWeight.w800)),const SizedBox(height:10),InkWell(onTap:()=>setState(()=>revealPractice=!revealPractice),borderRadius:BorderRadius.circular(22),child:Container(width:double.infinity,minHeight:190,padding:const EdgeInsets.all(22),decoration:BoxDecoration(color:colors.primaryContainer,borderRadius:BorderRadius.circular(22)),child:Column(mainAxisAlignment:MainAxisAlignment.center,children:[Icon(revealPractice?Icons.lightbulb_rounded:Icons.help_outline_rounded,size:32,color:colors.primary),const SizedBox(height:12),Text(revealPractice?'الإجابة':'اضغط لإظهار الإجابة',style:TextStyle(color:colors.primary,fontWeight:FontWeight.w900)),const SizedBox(height:10),Text('${revealPractice?card['back']:card['front']}',textAlign:TextAlign.center,style:const TextStyle(fontSize:17,fontWeight:FontWeight.w800))]))),if(revealPractice)Padding(padding:const EdgeInsets.only(top:14),child:FilledButton.icon(onPressed:()=>setState(()=>{practiceIndex++,revealPractice=false}),icon:const Icon(Icons.arrow_forward_rounded),label:const Text('البطاقة التالية')))]);
+    return Column(children:[
+      Text('بطاقة ${practiceIndex+1} من ${cards.length}',style:TextStyle(color:colors.primary,fontWeight:FontWeight.w800)),
+      const SizedBox(height:10),
+      InkWell(onTap:()=>setState(()=>revealPractice=!revealPractice),borderRadius:BorderRadius.circular(22),child:Container(width:double.infinity,constraints:const BoxConstraints(minHeight:190),padding:const EdgeInsets.all(22),decoration:BoxDecoration(color:colors.primaryContainer,borderRadius:BorderRadius.circular(22)),child:Column(mainAxisAlignment:MainAxisAlignment.center,children:[
+        Icon(revealPractice?Icons.lightbulb_rounded:Icons.help_outline_rounded,size:32,color:colors.primary),const SizedBox(height:12),
+        Text(revealPractice?'الإجابة':'اضغط لإظهار الإجابة',style:TextStyle(color:colors.primary,fontWeight:FontWeight.w900)),const SizedBox(height:10),
+        Text('${revealPractice?card['back']:card['front']}',textAlign:TextAlign.center,style:const TextStyle(fontSize:17,fontWeight:FontWeight.w800)),
+      ]))),
+      if(revealPractice)Padding(padding:const EdgeInsets.only(top:14),child:FilledButton.icon(onPressed:()=>setState((){practiceIndex++;revealPractice=false;}),icon:const Icon(Icons.arrow_forward_rounded),label:const Text('البطاقة التالية'))),
+    ]);
   }
 
   @override Widget build(BuildContext context){
