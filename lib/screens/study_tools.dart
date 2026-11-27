@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../backend.dart';
+import '../services.dart';
+import 'study_library.dart';
 
 class _StudyTool {
   final String title, subtitle, prompt, hint;
@@ -46,7 +49,13 @@ class StudyToolsPage extends StatelessWidget {
             Text('مجموعة أدوات ذكية تساعدك تفهم، تلخّص، تتدرّب وتنظّم وقتك.',style:TextStyle(color:Colors.white70,fontSize:12,height:1.6)),
           ]),
         ),
-        const SizedBox(height:24),
+        const SizedBox(height:16),
+        const StudySessionCard(),
+        const SizedBox(height:12),
+        const RecentStudyActivity(),
+        const SizedBox(height:12),
+        OutlinedButton.icon(onPressed:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>const StudyLibraryPage())),icon:const Icon(Icons.bookmarks_rounded),label:const Text('افتح مكتبتي الدراسية'),style:OutlinedButton.styleFrom(minimumSize:const Size.fromHeight(48),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(15)))),
+        const SizedBox(height:22),
         Row(children:[const Expanded(child:Text('كل أدواتك في مكان واحد',style:TextStyle(fontSize:18,fontWeight:FontWeight.w900))),Text('8 TOOLS',style:TextStyle(color:colors.onSurfaceVariant,fontSize:10,fontWeight:FontWeight.w800,letterSpacing:1))]),
         const SizedBox(height:13),
         GridView.builder(
@@ -64,6 +73,41 @@ class StudyToolsPage extends StatelessWidget {
       ],
     );
   }
+}
+
+class StudySessionCard extends StatefulWidget {
+  const StudySessionCard({super.key});
+  @override State<StudySessionCard> createState()=>_StudySessionCardState();
+}
+class _StudySessionCardState extends State<StudySessionCard>{
+  final Stopwatch watch=Stopwatch();
+  final TextEditingController title=TextEditingController(text:'جلسة مذاكرة');
+  Timer? ticker;
+  String elapsed='00:00:00';
+  bool saving=false;
+  void tick(){final d=watch.elapsed;if(mounted)setState(()=>elapsed='${d.inHours.toString().padLeft(2,'0')}:${(d.inMinutes%60).toString().padLeft(2,'0')}:${(d.inSeconds%60).toString().padLeft(2,'0')}');}
+  void start(){watch.start();ticker=Timer.periodic(const Duration(seconds:1),(_)=>tick());setState((){});}
+  Future<void> stopAndSave() async {
+    watch.stop();ticker?.cancel();final minutes=(watch.elapsed.inSeconds/60).ceil();
+    if(minutes<1){watch.reset();tick();setState((){});return;}
+    setState(()=>saving=true);
+    try{await supabase.from('study_sessions').insert({'user_id':supabase.auth.currentUser!.id,'title':title.text.trim().isEmpty?'جلسة مذاكرة':title.text.trim(),'started_at':DateTime.now().subtract(watch.elapsed).toUtc().toIso8601String(),'duration_minutes':minutes});if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('تم حفظ جلسة مذاكرة لمدة $minutes دقيقة')));watch.reset();tick();}
+    catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('تعذر حفظ الجلسة: $e')));}
+    finally{if(mounted)setState(()=>saving=false);}
+  }
+  @override void dispose(){ticker?.cancel();title.dispose();super.dispose();}
+  @override Widget build(BuildContext context){final colors=Theme.of(context).colorScheme;final running=watch.isRunning;return Container(padding:const EdgeInsets.all(16),decoration:BoxDecoration(color:colors.primaryContainer.withValues(alpha:.42),borderRadius:BorderRadius.circular(22),border:Border.all(color:colors.primary.withValues(alpha:.12))),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Row(children:[Icon(Icons.timer_rounded,color:colors.primary),const SizedBox(width:8),const Expanded(child:Text('جلسة مذاكرة مركّزة',style:TextStyle(fontWeight:FontWeight.w900,fontSize:15))),Text(elapsed,style:const TextStyle(fontWeight:FontWeight.w900,fontSize:18))]),const SizedBox(height:8),TextField(controller:title,enabled:!running&&!saving,decoration:const InputDecoration(isDense:true,labelText:'اسم الجلسة',prefixIcon:Icon(Icons.edit_note_rounded))),const SizedBox(height:12),Row(children:[Expanded(child:FilledButton.icon(onPressed:running||saving?null:start,icon:const Icon(Icons.play_arrow_rounded),label:const Text('ابدأ'))),const SizedBox(width:8),Expanded(child:OutlinedButton.icon(onPressed:running&&!saving?stopAndSave:null,icon:saving?const SizedBox(width:16,height:16,child:CircularProgressIndicator(strokeWidth:2)):const Icon(Icons.stop_rounded),label:const Text('إنهاء وحفظ')))])]));}
+}
+
+class RecentStudyActivity extends StatefulWidget {
+  const RecentStudyActivity({super.key});
+  @override State<RecentStudyActivity> createState()=>_RecentStudyActivityState();
+}
+class _RecentStudyActivityState extends State<RecentStudyActivity>{
+  late Future<List<Map<String,dynamic>>> future;
+  @override void initState(){super.initState();future=load();}
+  Future<List<Map<String,dynamic>>> load()async=>List<Map<String,dynamic>>.from(await supabase.from('study_library_items').select('id,title,item_type,created_at').order('created_at',ascending:false).limit(3));
+  @override Widget build(BuildContext context){final colors=Theme.of(context).colorScheme;return FutureBuilder<List<Map<String,dynamic>>>(future:future,builder:(context,s){if(s.connectionState!=ConnectionState.done||!s.hasData||s.data!.isEmpty)return const SizedBox.shrink();return Container(padding:const EdgeInsets.all(14),decoration:BoxDecoration(color:Theme.of(context).cardColor,borderRadius:BorderRadius.circular(18),border:Border.all(color:colors.outlineVariant.withValues(alpha:.55))),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Row(children:[const Expanded(child:Text('آخر ما حفظته',style:TextStyle(fontWeight:FontWeight.w900))),TextButton(onPressed:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>const StudyLibraryPage())),child:const Text('عرض الكل'))]),...s.data!.map((x)=>ListTile(dense:true,contentPadding:EdgeInsets.zero,leading:Icon(Icons.bookmark_added_rounded,color:colors.primary),title:Text('${x['title']}',maxLines:1,overflow:TextOverflow.ellipsis,style:const TextStyle(fontSize:12,fontWeight:FontWeight.w700)),subtitle:Text('${x['item_type']}',style:TextStyle(fontSize:10,color:colors.onSurfaceVariant))))]));});}
 }
 
 class _ToolCard extends StatelessWidget {
@@ -110,6 +154,17 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
   String? subjectId;
   List<Map<String,dynamic>> subjects=[];
   List<Map<String,dynamic>> sources=[];
+  Map<String,dynamic>? practiceData;
+  int practiceIndex=0;
+  String? selectedAnswer;
+  bool revealPractice=false;
+  int practiceScore=0;
+  bool practiceSaved=false;
+  String pdfDepth='Standard';
+  String summaryMode='Study Notes';
+  String explainerLevel='University';
+  String quizDifficulty='Medium';
+  int quizCount=8;
   PlatformFile? pdfFile;
   @override void initState(){super.initState();loadSubjects();}
   Future<void> loadSubjects() async {
@@ -122,6 +177,50 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
     } finally { if(mounted)setState(()=>loadingSubjects=false); }
   }
   @override void dispose(){controller.dispose();super.dispose();}
+  String _toolSettingsPrompt() {
+    return switch(widget.tool.title){
+      'PDF Analyzer' => '\\nAnalysis depth: $pdfDepth. ${pdfDepth=='Quick'?'Give a concise overview.':pdfDepth=='Deep'?'Provide a detailed section-by-section analysis, concepts, definitions, formulas, pitfalls, and revision questions.':'Provide a balanced analysis with key concepts, definitions, and revision points.'}',
+      'Smart Summarizer' => '\\nSummary format: $summaryMode. ${summaryMode=='Quick Summary'?'Keep it concise and prioritize the core ideas.':summaryMode=='Exam Revision'?'Focus on likely exam points, formulas, definitions, comparisons, and common mistakes.':'Create structured study notes with headings, examples, and key terms.'}',
+      'AI Explainer' => '\\nExplanation level: $explainerLevel. ${explainerLevel=='Beginner'?'Assume no prior knowledge and explain from the basics.':explainerLevel=='Advanced'?'Use university-level depth, precise terminology, and rigorous reasoning.':'Explain at a standard university undergraduate level.'} End with two comprehension questions.',
+      'Quiz Generator' => '\\nGenerate exactly $quizCount questions. Difficulty: $quizDifficulty.',
+      _ => '',
+    };
+  }
+
+  Future<String> _realContext(String task) async {
+    final since=DateTime.now().subtract(const Duration(days:30)).toUtc().toIso8601String();
+    if(task=='planner'){
+      final results=await Future.wait([
+        supabase.from('academic_events').select('title,event_type,starts_at,subjects(name_en)').eq('is_active',true).gte('starts_at',DateTime.now().toUtc().toIso8601String()).order('starts_at').limit(60),
+        AcadMindData.schedule(),
+      ]);
+      final events=List<Map<String,dynamic>>.from(results[0]);
+      final schedule=List<Map<String,dynamic>>.from(results[1]);
+      return '\\n\\nالامتحانات والمهام والأحداث المسجلة القادمة (لا تخترع مواعيد):\\n${events.map((e)=>'${e['title']} | ${e['event_type']} | ${e['starts_at']} | ${e['subjects'] is Map ? e['subjects']['name_en'] : ''}').join('\\n')}\\n\\nجدول المحاضرات الأسبوعي المسجل: ${schedule.take(60).map((e)=>'${e['subjects'] is Map ? e['subjects']['name_en'] : 'محاضرة'} | اليوم ${e['day_of_week']} | ${e['starts_at']} - ${e['ends_at']} | ${e['location']??''}').join('\\n')}';
+    }
+    if(task=='analytics'){
+      final results=await Future.wait([
+        supabase.from('study_sessions').select('title,duration_minutes,started_at,subjects(name_en)').gte('started_at',since).order('started_at',ascending:false).limit(200),
+        supabase.from('quiz_attempts').select('title,score,max_score,created_at,subjects(name_en)').gte('created_at',since).order('created_at',ascending:false).limit(100),
+        supabase.from('assignment_progress').select('status,updated_at').limit(200),
+      ]);
+      final sessions=List<Map<String,dynamic>>.from(results[0]);final quizzes=List<Map<String,dynamic>>.from(results[1]);final assignments=List<Map<String,dynamic>>.from(results[2]);
+      final minutes=sessions.fold<int>(0,(sum,x)=>sum+((x['duration_minutes'] as num?)?.toInt()??0));
+      final completed=assignments.where((x)=>x['status']=='completed').length;
+      final quizAvg=quizzes.isEmpty?null:quizzes.fold<double>(0,(sum,x)=>sum+(((x['score'] as num?)?.toDouble()??0)/((x['max_score'] as num?)?.toDouble()??1)*100))/quizzes.length;
+      return '\\n\\nبيانات التقدم الحقيقية (آخر 30 يوماً):\\nجلسات المذاكرة: ${sessions.length}\\nإجمالي دقائق المذاكرة: $minutes\\nمحاولات الاختبارات: ${quizzes.length}\\nمتوسط الاختبارات: ${quizAvg?.toStringAsFixed(1)??'لا توجد بيانات'}%\\nالواجبات المكتملة: $completed من ${assignments.length}\\nالجلسات: ${sessions.take(30).map((x)=>'${x['title']} • ${x['duration_minutes']} دقيقة').join(' | ')}\\nالاختبارات: ${quizzes.take(30).map((x)=>'${x['title']} • ${x['score']}/${x['max_score']}').join(' | ')}';
+    }
+    return '';
+  }
+  Future<void> saveToLibrary() async {
+    if(answer==null||answer!.trim().isEmpty)return;setState(()=>busy=true);
+    try{
+      final type=switch(widget.tool.title){'PDF Analyzer'=>'analysis','Smart Summarizer'=>'summary','Quiz Generator'=>'quiz','Flashcards'=>'flashcards','AI Explainer'=>'explanation','Study Planner'=>'plan','AI Study Assistant'=>'chat',_=>'note'};
+      await supabase.from('study_library_items').insert({'user_id':supabase.auth.currentUser!.id,'subject_id':subjectId,'item_type':type,'title':'${widget.tool.title} • ${DateTime.now().toLocal().toString().substring(0,16)}','content':answer,'metadata':{'sources':sources}});
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('تم حفظ النتيجة في مكتبتك الدراسية')));
+    }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('تعذر حفظ النتيجة: $e')));}
+    finally{if(mounted)setState(()=>busy=false);}
+  }
   Future<void> pickPdf() async {
     final result=await FilePicker.platform.pickFiles(type:FileType.custom,allowedExtensions:['pdf'],withData:true);
     if(result==null)return;
@@ -139,7 +238,7 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
       setState(()=>answer='جلسة الدخول غير موجودة. سجّل الدخول مرة أخرى لاستخدام أدوات الذكاء الاصطناعي.');
       return;
     }
-    setState(() { busy = true; answer = null; sources = []; });
+    setState(() { busy = true; answer = null; sources = []; practiceData=null; practiceIndex=0; selectedAnswer=null; revealPractice=false; practiceScore=0; });
     try{
       final task = switch (widget.tool.title) {
         'AI Study Assistant' => 'chat',
@@ -155,7 +254,7 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
       final result=await supabase.functions.invoke('ai-chat',
         headers:{'Authorization':'Bearer ${session.accessToken}'},
         body:{
-        'question':'${widget.tool.prompt}\n\nمدخلات الطالب:\n${value.isEmpty?'حلل الملف المرفق بالكامل واستخرج أهم النقاط والأسئلة.':value}',
+        'question':'${widget.tool.prompt}\n\nمدخلات الطالب:\n${value.isEmpty?'حلل الملف المرفق بالكامل واستخرج أهم النقاط والأسئلة.':value}${task=='quiz'?'\nأخرج JSON صالحاً فقط بلا Markdown وفق schema: {"title":"...","questions":[{"question":"...","options":["A","B","C","D"],"answer":"النص المطابق لأحد الخيارات","explanation":"..."}]} مع العدد والصعوبة المحددين.':task=='flashcards'?'\nأخرج JSON صالحاً فقط بلا Markdown وفق schema: {"title":"...","cards":[{"front":"سؤال","back":"إجابة"}]} مع 12 بطاقة.':''}${_toolSettingsPrompt()}${await _realContext(task)}',
         'task':task,
         'subjectId':subjectId,
         'retrieve':subjectId!=null,
@@ -166,7 +265,25 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
       final data=Map<String,dynamic>.from(result.data as Map);
       final text=(data['answer']??data['error']??'لم يصل رد من المساعد.').toString();
       final retrieved=data['sources'] is List ? List<Map<String,dynamic>>.from((data['sources'] as List).whereType<Map>().map((e)=>Map<String,dynamic>.from(e))) : <Map<String,dynamic>>[];
-      if(mounted)setState(() { answer = text; sources = retrieved; });
+      Map<String,dynamic>? structured;
+      if(task=='quiz'||task=='flashcards'){
+        try{
+          var raw=text.trim();
+          final fence=String.fromCharCode(96)*3;
+          if(raw.startsWith(fence)){
+            raw=raw.substring(3).trim();
+            if(raw.startsWith('json'))raw=raw.substring(4).trim();
+          }
+          if(raw.endsWith(fence))raw=raw.substring(0,raw.length-3).trim();
+          final start=raw.indexOf('{');
+          final end=raw.lastIndexOf('}');
+          if(start>=0&&end>start){
+            final parsed=jsonDecode(raw.substring(start,end+1));
+            if(parsed is Map)structured=Map<String,dynamic>.from(parsed);
+          }
+        }catch(_){structured=null;}
+      }
+      if(mounted)setState((){answer=text;sources=retrieved;practiceData=structured;});
     }on FunctionException catch(e){
       final detail=e.details is Map
           ? ((e.details as Map)['error']??(e.details as Map)['message']??'').toString()
@@ -181,6 +298,82 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
       if(mounted)setState(()=>answer='حدث خطأ أثناء الاتصال بخدمة الذكاء الاصطناعي. تأكد من الاتصال وإعداد الخدمة ثم حاول مرة أخرى.');
     }finally{if(mounted)setState(()=>busy=false);}
   }
+  Future<void> _saveGeneratedQuizAttempt() async {
+    if(practiceSaved)return;
+    practiceSaved=true;
+    try{
+      final questions=practiceData?['questions'] is List?(practiceData!['questions'] as List):const [];
+      await supabase.from('quiz_attempts').insert({'user_id':supabase.auth.currentUser!.id,'subject_id':subjectId,'title':(practiceData?['title']??'AI Generated Quiz').toString(),'score':practiceScore,'max_score':questions.length,'answers':[]});
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('تم حفظ نتيجتك ضمن تقدمك الدراسي')));
+    }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('لم يتم حفظ النتيجة: $e')));}
+  }
+
+  Widget _buildInteractiveQuiz(ColorScheme colors) {
+    final questions = List<Map<String,dynamic>>.from(
+      (practiceData!['questions'] as List).whereType<Map>().map((e)=>Map<String,dynamic>.from(e)));
+    if (questions.isEmpty) return const Text('لم يتم إنشاء أسئلة قابلة للتشغيل.');
+    if (practiceIndex >= questions.length) {
+      return Container(padding:const EdgeInsets.all(18),decoration:BoxDecoration(color:colors.primaryContainer,borderRadius:BorderRadius.circular(18)),child:Column(children:[
+        const Icon(Icons.emoji_events_rounded,size:42),const SizedBox(height:8),
+        const Text('انتهى الاختبار',style:TextStyle(fontWeight:FontWeight.w900,fontSize:20)),
+        Text('نتيجتك: $practiceScore / ${questions.length}',style:const TextStyle(fontWeight:FontWeight.w800)),
+        FilledButton(onPressed:()=>setState((){practiceIndex=0;practiceScore=0;selectedAnswer=null;revealPractice=false;}),child:const Text('إعادة الاختبار')),
+      ]));
+    }
+    final q=questions[practiceIndex];
+    final options=List<String>.from(q['options'] is List?q['options']:const []);
+    final correct=(q['answer']??'').toString();
+    return Container(padding:const EdgeInsets.all(16),decoration:BoxDecoration(color:Theme.of(context).cardColor,borderRadius:BorderRadius.circular(20),border:Border.all(color:colors.outlineVariant)),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+      Row(children:[Text('سؤال ${practiceIndex+1} من ${questions.length}',style:TextStyle(color:colors.primary,fontWeight:FontWeight.w900)),const Spacer(),Text('النتيجة $practiceScore',style:const TextStyle(fontWeight:FontWeight.w800))]),
+      const SizedBox(height:12),Text('${q['question']??''}',style:const TextStyle(fontSize:16,fontWeight:FontWeight.w800)),const SizedBox(height:12),
+      ...options.map((option){
+        final isCorrect=option.trim().toLowerCase()==correct.trim().toLowerCase();
+        final isSelected=selectedAnswer==option;
+        return Padding(padding:const EdgeInsets.only(bottom:8),child:OutlinedButton(
+          onPressed:revealPractice?null:(){
+            setState((){selectedAnswer=option;revealPractice=true;if(isCorrect)practiceScore++;});
+          },
+          style:OutlinedButton.styleFrom(minimumSize:const Size.fromHeight(46),alignment:Alignment.centerRight,side:BorderSide(color:revealPractice&&isCorrect?Colors.green:revealPractice&&isSelected?Colors.red:colors.outlineVariant)),
+          child:Row(children:[Expanded(child:Text(option)),if(revealPractice&&isCorrect)const Icon(Icons.check_circle,color:Colors.green),if(revealPractice&&isSelected&&!isCorrect)const Icon(Icons.cancel,color:Colors.red)]),
+        ));
+      }),
+      if(revealPractice)...[
+        const SizedBox(height:8),Text('الإجابة الصحيحة: $correct',style:const TextStyle(color:Colors.green,fontWeight:FontWeight.w900)),
+        if((q['explanation']??'').toString().isNotEmpty)Padding(padding:const EdgeInsets.only(top:6),child:Text('${q['explanation']}')),
+        const SizedBox(height:12),
+        FilledButton(onPressed:(){final last=practiceIndex==questions.length-1;setState((){practiceIndex++;selectedAnswer=null;revealPractice=false;});if(last)_saveGeneratedQuizAttempt();},child:Text(practiceIndex==questions.length-1?'عرض النتيجة':'السؤال التالي')),
+      ],
+    ]));
+  }
+
+  Future<void> _reviewGeneratedCard(String difficulty) async {
+    final titleKey=(practiceData?['title']??widget.tool.title).toString().replaceAll(RegExp(r'[^a-zA-Z0-9_-]'),'_');
+    final key='ai:$titleKey:${subjectId??'general'}:$practiceIndex';
+    try{await supabase.from('flashcard_reviews').upsert({'user_id':supabase.auth.currentUser!.id,'card_key':key,'difficulty':difficulty,'reviewed_at':DateTime.now().toUtc().toIso8601String()});}
+    catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('تعذر حفظ مستوى المراجعة: $e')));}
+    if(mounted)setState((){practiceIndex++;revealPractice=false;});
+  }
+
+  Widget _buildInteractiveFlashcards(ColorScheme colors) {
+    final cards=List<Map<String,dynamic>>.from((practiceData!['cards'] as List).whereType<Map>().map((e)=>Map<String,dynamic>.from(e)));
+    if(cards.isEmpty)return const Text('لم يتم إنشاء بطاقات قابلة للمراجعة.');
+    if(practiceIndex>=cards.length)return Container(padding:const EdgeInsets.all(18),decoration:BoxDecoration(color:colors.primaryContainer,borderRadius:BorderRadius.circular(18)),child:Column(children:[
+      const Icon(Icons.done_all_rounded,size:40),Text('راجعت ${cards.length} بطاقة',style:const TextStyle(fontWeight:FontWeight.w900)),
+      FilledButton(onPressed:()=>setState((){practiceIndex=0;revealPractice=false;}),child:const Text('ابدأ من جديد')),
+    ]));
+    final card=cards[practiceIndex];
+    return Column(children:[
+      Text('بطاقة ${practiceIndex+1} من ${cards.length}',style:TextStyle(color:colors.primary,fontWeight:FontWeight.w800)),
+      const SizedBox(height:10),
+      InkWell(onTap:()=>setState(()=>revealPractice=!revealPractice),borderRadius:BorderRadius.circular(22),child:Container(width:double.infinity,constraints:const BoxConstraints(minHeight:190),padding:const EdgeInsets.all(22),decoration:BoxDecoration(color:colors.primaryContainer,borderRadius:BorderRadius.circular(22)),child:Column(mainAxisAlignment:MainAxisAlignment.center,children:[
+        Icon(revealPractice?Icons.lightbulb_rounded:Icons.help_outline_rounded,size:32,color:colors.primary),const SizedBox(height:12),
+        Text(revealPractice?'الإجابة':'اضغط لإظهار الإجابة',style:TextStyle(color:colors.primary,fontWeight:FontWeight.w900)),const SizedBox(height:10),
+        Text('${revealPractice?card['back']:card['front']}',textAlign:TextAlign.center,style:const TextStyle(fontSize:17,fontWeight:FontWeight.w800)),
+      ]))),
+      if(revealPractice)Padding(padding:const EdgeInsets.only(top:14),child:Column(children:[const Text('قيّم مدى تذكرك للإجابة',style:TextStyle(fontWeight:FontWeight.w800)),const SizedBox(height:8),Row(children:[Expanded(child:OutlinedButton(onPressed:()=>_reviewGeneratedCard('difficult'),child:const Text('صعب'))),const SizedBox(width:6),Expanded(child:OutlinedButton(onPressed:()=>_reviewGeneratedCard('normal'),child:const Text('متوسط'))),const SizedBox(width:6),Expanded(child:FilledButton(onPressed:()=>_reviewGeneratedCard('known'),child:const Text('متقن')))])])),
+    ]);
+  }
+
   @override Widget build(BuildContext context){
     final colors=Theme.of(context).colorScheme;
     return Scaffold(
@@ -197,6 +390,10 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
         ),
         if(loadingSubjects) const Padding(padding:EdgeInsets.only(top:8),child:LinearProgressIndicator()),
         if(!loadingSubjects && subjects.isEmpty) const Padding(padding:EdgeInsets.only(top:8),child:Text('لا توجد مواد متاحة أو تعذر تحميلها. يمكنك المحاولة لاحقاً.',style:TextStyle(fontSize:11))),
+        if(widget.tool.title=='PDF Analyzer') DropdownButtonFormField<String>(value:pdfDepth,decoration:const InputDecoration(labelText:'عمق التحليل'),items:const [DropdownMenuItem(value:'Quick',child:Text('Quick • سريع')),DropdownMenuItem(value:'Standard',child:Text('Standard • متوازن')),DropdownMenuItem(value:'Deep',child:Text('Deep • تفصيلي'))],onChanged:busy?null:(v)=>setState(()=>pdfDepth=v??pdfDepth)),
+        if(widget.tool.title=='Smart Summarizer') DropdownButtonFormField<String>(value:summaryMode,decoration:const InputDecoration(labelText:'نمط التلخيص'),items:const [DropdownMenuItem(value:'Quick Summary',child:Text('Quick Summary')),DropdownMenuItem(value:'Study Notes',child:Text('Study Notes')),DropdownMenuItem(value:'Exam Revision',child:Text('Exam Revision'))],onChanged:busy?null:(v)=>setState(()=>summaryMode=v??summaryMode)),
+        if(widget.tool.title=='AI Explainer') DropdownButtonFormField<String>(value:explainerLevel,decoration:const InputDecoration(labelText:'مستوى الشرح'),items:const [DropdownMenuItem(value:'Beginner',child:Text('Beginner • مبتدئ')),DropdownMenuItem(value:'University',child:Text('University • جامعي')),DropdownMenuItem(value:'Advanced',child:Text('Advanced • متقدم'))],onChanged:busy?null:(v)=>setState(()=>explainerLevel=v??explainerLevel)),
+        if(widget.tool.title=='Quiz Generator') Row(children:[Expanded(child:DropdownButtonFormField<int>(value:quizCount,decoration:const InputDecoration(labelText:'عدد الأسئلة'),items:const [DropdownMenuItem(value:5,child:Text('5')),DropdownMenuItem(value:8,child:Text('8')),DropdownMenuItem(value:10,child:Text('10')),DropdownMenuItem(value:15,child:Text('15'))],onChanged:busy?null:(v)=>setState(()=>quizCount=v??quizCount))),const SizedBox(width:10),Expanded(child:DropdownButtonFormField<String>(value:quizDifficulty,decoration:const InputDecoration(labelText:'الصعوبة'),items:const [DropdownMenuItem(value:'Easy',child:Text('Easy')),DropdownMenuItem(value:'Medium',child:Text('Medium')),DropdownMenuItem(value:'Hard',child:Text('Hard'))],onChanged:busy?null:(v)=>setState(()=>quizDifficulty=v??quizDifficulty)))]),
         const SizedBox(height:14),
         Text(widget.tool.title=='PDF Analyzer'?'محتوى ملف PDF':'المحتوى أو التفاصيل',style:const TextStyle(fontWeight:FontWeight.w800,fontSize:14)),
         const SizedBox(height:8),
@@ -210,8 +407,10 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
         SizedBox(height:50,child:FilledButton.icon(onPressed:busy?null:generate,icon:busy?const SizedBox(width:18,height:18,child:CircularProgressIndicator(strokeWidth:2,color:Colors.white)):const Icon(Icons.auto_awesome_rounded),label:Text(busy?'جاري التحليل...':'ابدأ الآن'),style:FilledButton.styleFrom(shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(16))))),
         if(answer!=null)...[
           const SizedBox(height:22),
-          Row(children:[const Expanded(child:Text('النتيجة',style:TextStyle(fontWeight:FontWeight.w900,fontSize:18))),IconButton(onPressed:()=>setState(()=>answer=null),icon:const Icon(Icons.close_rounded))]),
-          Container(padding:const EdgeInsets.all(16),decoration:BoxDecoration(color:Theme.of(context).cardColor,borderRadius:BorderRadius.circular(20),border:Border.all(color:colors.outlineVariant.withValues(alpha:.6))),child:MarkdownBody(data:answer!,selectable:true,styleSheet:MarkdownStyleSheet.fromTheme(Theme.of(context)))),
+          Row(children:[const Expanded(child:Text('النتيجة',style:TextStyle(fontWeight:FontWeight.w900,fontSize:18))),IconButton(tooltip:'حفظ في مكتبتي',onPressed:busy?null:saveToLibrary,icon:const Icon(Icons.bookmark_add_rounded)),IconButton(onPressed:()=>setState(()=>answer=null),icon:const Icon(Icons.close_rounded))]),
+          if(widget.tool.title=='Quiz Generator' && practiceData?['questions'] is List) _buildInteractiveQuiz(colors),
+          if(widget.tool.title=='Flashcards' && practiceData?['cards'] is List) _buildInteractiveFlashcards(colors),
+          if(practiceData==null) Container(padding:const EdgeInsets.all(16),decoration:BoxDecoration(color:Theme.of(context).cardColor,borderRadius:BorderRadius.circular(20),border:Border.all(color:colors.outlineVariant.withValues(alpha:.6))),child:MarkdownBody(data:answer!,selectable:true,styleSheet:MarkdownStyleSheet.fromTheme(Theme.of(context)))),
           if(sources.isNotEmpty)...[
             const SizedBox(height:12),
             const Text('المصادر المستخدمة',style:TextStyle(fontWeight:FontWeight.w900,fontSize:13)),
