@@ -1421,9 +1421,11 @@ class _KnowledgeAdminState extends State<KnowledgeAdmin> {
               .update({'status': 'failed'}).eq('id', docId);
         } catch (_) {}
       }
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('فشل رفع/معالجة الملف: $e')));
+        reload();
+      }
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -1483,8 +1485,9 @@ class _KnowledgeAdminState extends State<KnowledgeAdmin> {
               body: {'question': question.text.trim(), 'subjectId': doc['subject_id'], 'lectureId': doc['lecture_id'], 'retrieve': true, 'task': 'chat'});
             final data = Map<String, dynamic>.from(response.data as Map);
             final sources = data['sources'] is List ? List.from(data['sources'] as List) : [];
+            final documentSources = sources.where((s) => s is Map && s['documentId'] == doc['id']).toList();
             final answer = (data['answer'] ?? data['error'] ?? 'لا يوجد رد').toString();
-            setD(() => resultText = sources.isEmpty ? 'لم يتم العثور على مصادر من الملف.\n\n$answer' : 'تم العثور على ${sources.length} مصدر.\n\n$answer\n\nالمصادر: ${sources.map((s) => '${s['documentName']} • صفحة ${s['page'] ?? 'غير محددة'}').join('، ')}');
+            setD(() => resultText = documentSources.isEmpty ? 'لم يتم استرجاع أي مقطع من هذا الملف.\n\n$answer' : 'نجح الاختبار: تم استرجاع ${documentSources.length} مقطع من الملف.\n\n$answer\n\nالمصادر: ${documentSources.map((s) => '${s['documentName']} • صفحة ${s['page'] ?? 'غير محددة'}').join('، ')}');
           } catch (e) { setD(() => resultText = 'فشل الاختبار: $e'); }
           finally { setD(() => testing = false); }
         }, child: testing ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('اختبر الآن')),
