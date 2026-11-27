@@ -89,12 +89,19 @@ Deno.serve(async (request) => {
   const { data: subject } = await client.from("subjects").select("id").eq("id", doc.subject_id).maybeSingle();
   if (!subject) return response({ error: "Subject not found" }, 404);
 
+  let stage = "download";
+  const { error: processingError } = await client.from("knowledge_documents").update({ status: "processing" }).eq("id", doc.id);
+  if (processingError) return response({ error: "Unable to update document processing status", stage: "status" }, 500);
+
   try {
+    stage = "download";
     const { data: file, error: downloadError } = await client.storage.from("course-documents").download(doc.storage_path);
     if (downloadError || !file) throw new Error("Unable to download private course document");
+    stage = "extract_text";
     const extracted = await extractText(file, doc.mime_type, doc.storage_path);
     const cleaned = extracted.text.replaceAll("\u0000", "").replace(/[\t ]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
     if (!cleaned || cleaned.length > 1_000_000) throw new Error("Extracted text is empty or exceeds the 1 MB processing limit");
+    stage = "chunk_text";
     const chunks: Array<{ content: string; index: number; page_number: number | null }> = []; const size = 1400; const overlap = 180;
     for (let start = 0; start < cleaned.length && chunks.length < 800;) {
       let end = Math.min(start + size, cleaned.length);
@@ -104,7 +111,8 @@ Deno.serve(async (request) => {
       if (end >= cleaned.length) break; start = end - overlap;
     }
     if (chunks.length === 800 && cleaned.length > size * 800) throw new Error("Document exceeds the 800-chunk processing limit");
-    await client.from("knowledge_documents").update({ status: "processing" }).eq("id", doc.id);
+    if (chunks.length === 0) throw new Error("No searchable text chunks were extracted from this document");
+    stage = "generate_embeddings";
     const records: Array<Record<string, unknown>> = [];
     for (let i = 0; i < chunks.length; i += 32) {
       const batch = chunks.slice(i, i + 32);
@@ -115,11 +123,14 @@ Deno.serve(async (request) => {
         embedding: JSON.stringify(vectors[j]),
       }));
     }
-    await client.from("knowledge_chunks").delete().eq("document_id", doc.id);
+    stage = "index_chunks";
+    const { error: deleteError } = await client.from("knowledge_chunks").delete().eq("document_id", doc.id);
+    if (deleteError) throw new Error("Unable to replace previous knowledge chunks");
     for (let i = 0; i < records.length; i += 100) {
       const { error } = await client.from("knowledge_chunks").insert(records.slice(i, i + 100));
       if (error) throw new Error("Unable to save knowledge chunks");
     }
+    stage = "finalize_document";
     const { error: finishError } = await client.from("knowledge_documents").update({
       status: "ready", page_count: extracted.pageCount,
       metadata: { chunk_count: chunks.length, extracted_at: new Date().toISOString(), embedding_model: "gemini-embedding-2", embedding_dimensions: 1536 },
@@ -127,8 +138,14 @@ Deno.serve(async (request) => {
     if (finishError) throw new Error("Unable to mark document ready");
     return response({ documentId: doc.id, chunks: chunks.length, pageCount: extracted.pageCount, status: "ready", provider: "Gemini" });
   } catch (error) {
-    await client.from("knowledge_documents").update({ status: "failed" }).eq("id", doc.id);
-    console.error("ingest-knowledge failed", error instanceof Error ? error.message : "unknown error");
-    return response({ error: "Document ingestion failed. Check Gemini API access and try again." }, 502);
+    const detail = error instanceof Error ? error.message : "Unknown processing error";
+    const { error: statusError } = await client.from("knowledge_documents").update({ status: "failed" }).eq("id", doc.id);
+    console.error("ingest-knowledge failed", { stage, detail, statusUpdateFailed: !!statusError });
+    return response({
+      error: "Document processing failed. The file was not marked as ready.",
+      stage,
+      detail: detail.slice(0, 500),
+      retryable: stage !== "extract_text" || !detail.toLowerCase().includes("unsupported"),
+    }, 502);
   }
 });
