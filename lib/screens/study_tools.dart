@@ -146,6 +146,7 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
   String? selectedAnswer;
   bool revealPractice=false;
   int practiceScore=0;
+  bool practiceSaved=false;
   PlatformFile? pdfFile;
   @override void initState(){super.initState();loadSubjects();}
   Future<void> loadSubjects() async {
@@ -254,6 +255,16 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
       if(mounted)setState(()=>answer='حدث خطأ أثناء الاتصال بخدمة الذكاء الاصطناعي. تأكد من الاتصال وإعداد الخدمة ثم حاول مرة أخرى.');
     }finally{if(mounted)setState(()=>busy=false);}
   }
+  Future<void> _saveGeneratedQuizAttempt() async {
+    if(practiceSaved)return;
+    practiceSaved=true;
+    try{
+      final questions=practiceData?['questions'] is List?(practiceData!['questions'] as List):const [];
+      await supabase.from('quiz_attempts').insert({'user_id':supabase.auth.currentUser!.id,'subject_id':subjectId,'title':(practiceData?['title']??'AI Generated Quiz').toString(),'score':practiceScore,'max_score':questions.length,'answers':[]});
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('تم حفظ نتيجتك ضمن تقدمك الدراسي')));
+    }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('لم يتم حفظ النتيجة: $e')));}
+  }
+
   Widget _buildInteractiveQuiz(ColorScheme colors) {
     final questions = List<Map<String,dynamic>>.from(
       (practiceData!['questions'] as List).whereType<Map>().map((e)=>Map<String,dynamic>.from(e)));
@@ -287,7 +298,7 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
         const SizedBox(height:8),Text('الإجابة الصحيحة: $correct',style:const TextStyle(color:Colors.green,fontWeight:FontWeight.w900)),
         if((q['explanation']??'').toString().isNotEmpty)Padding(padding:const EdgeInsets.only(top:6),child:Text('${q['explanation']}')),
         const SizedBox(height:12),
-        FilledButton(onPressed:()=>setState((){practiceIndex++;selectedAnswer=null;revealPractice=false;}),child:Text(practiceIndex==questions.length-1?'عرض النتيجة':'السؤال التالي')),
+        FilledButton(onPressed:(){final last=practiceIndex==questions.length-1;setState((){practiceIndex++;selectedAnswer=null;revealPractice=false;});if(last)_saveGeneratedQuizAttempt();},child:Text(practiceIndex==questions.length-1?'عرض النتيجة':'السؤال التالي')),
       ],
     ]));
   }
