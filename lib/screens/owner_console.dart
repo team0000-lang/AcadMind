@@ -1290,6 +1290,21 @@ Future<void> _scheduleForm(BuildContext context, VoidCallback done,
   teacher.dispose();
 }
 
+String _knowledgeErrorMessage(Object error) {
+  if (error is FunctionException) {
+    final details = error.details;
+    if (details is Map) {
+      final message = details['detail'] ?? details['error'] ?? details['message'];
+      final stage = details['stage'];
+      if (message != null) {
+        return '${message}${stage == null ? '' : ' • المرحلة: $stage'}';
+      }
+    }
+    return 'خدمة معالجة الملفات أعادت HTTP ${error.status}';
+  }
+  return error.toString();
+}
+
 String _knowledgeStatusLabel(dynamic status) => switch (status) {
   'uploaded' => 'تم الرفع - في انتظار المعالجة',
   'processing' => 'جاري التحليل',
@@ -1455,7 +1470,7 @@ class _KnowledgeAdminState extends State<KnowledgeAdmin> {
       }
       if (mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('فشل رفع/معالجة الملف: $e')));
+            .showSnackBar(SnackBar(content: Text('فشل رفع/معالجة الملف: ${_knowledgeErrorMessage(e)}')));
         reload();
       }
     } finally {
