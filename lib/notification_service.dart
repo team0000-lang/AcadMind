@@ -5,7 +5,8 @@ import 'package:timezone/timezone.dart' as tz;
 class NotificationService {
   NotificationService._();
   static final instance = NotificationService._();
-  final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
+  final FlutterLocalNotificationsPlugin _plugin =
+      FlutterLocalNotificationsPlugin();
   bool _ready = false;
 
   Future<void> initialize() async {
@@ -17,18 +18,25 @@ class NotificationService {
       iOS: DarwinInitializationSettings(),
     );
     await _plugin.initialize(settings);
-    await _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()?.requestNotificationsPermission();
+    await _plugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.requestNotificationsPermission();
     _ready = true;
   }
 
-  int _stableId(String value) => value.codeUnits.fold<int>(0, (sum, unit) => (sum * 31 + unit) & 0x7fffffff);
+  int _stableId(String value) => value.codeUnits.fold<int>(
+        0,
+        (sum, unit) => (sum * 31 + unit) & 0x7fffffff,
+      );
 
   Future<void> syncSchedule(List<Map<String, dynamic>> rows) async {
     await initialize();
     await _plugin.cancelAll();
     const beforeDetails = NotificationDetails(
       android: AndroidNotificationDetails(
-        'acadmind_lecture_before', 'تذكير قبل المحاضرة',
+        'acadmind_lecture_before',
+        'تذكير قبل المحاضرة',
         channelDescription: 'تنبيه قبل المحاضرة أو السكشن بعشر دقائق',
         importance: Importance.high,
         priority: Priority.high,
@@ -37,7 +45,8 @@ class NotificationService {
     );
     const startDetails = NotificationDetails(
       android: AndroidNotificationDetails(
-        'acadmind_lecture_start', 'بداية المحاضرة',
+        'acadmind_lecture_start',
+        'بداية المحاضرة',
         channelDescription: 'تنبيه عند موعد بداية المحاضرة أو السكشن',
         importance: Importance.max,
         priority: Priority.max,
@@ -59,7 +68,14 @@ class NotificationService {
 
       final todayIndex = now.weekday % 7; // Sunday = 0
       final daysAhead = (day - todayIndex + 7) % 7;
-      var lecture = tz.TZDateTime(tz.local, now.year, now.month, now.day + daysAhead, hour, minute);
+      var lecture = tz.TZDateTime(
+        tz.local,
+        now.year,
+        now.month,
+        now.day + daysAhead,
+        hour,
+        minute,
+      );
       // If today's lesson has already started, target the next weekly occurrence.
       if (!lecture.isAfter(now)) {
         lecture = lecture.add(const Duration(days: 7));
@@ -97,6 +113,54 @@ class NotificationService {
         startDetails,
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
         matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
+      );
+    }
+  }
+
+  Future<void> syncAcademicEvents(List<Map<String, dynamic>> events) async {
+    await initialize();
+    final now = tz.TZDateTime.now(tz.local);
+    const details = NotificationDetails(
+      android: AndroidNotificationDetails(
+        'acadmind_academic_events',
+        'تذكيرات أكاديمية',
+        channelDescription:
+            'تذكيرات الامتحانات والواجبات والفعاليات الأكاديمية',
+        importance: Importance.high,
+        priority: Priority.high,
+      ),
+      iOS: DarwinNotificationDetails(),
+    );
+    for (final event in events) {
+      final minutes = (event['reminder_minutes'] as num?)?.toInt() ?? 0;
+      if (minutes <= 0 || event['is_active'] == false) continue;
+      final startsAt = DateTime.tryParse((event['starts_at'] ?? '').toString());
+      if (startsAt == null) continue;
+      final reminder = tz.TZDateTime.from(
+        startsAt,
+        tz.local,
+      ).subtract(Duration(minutes: minutes));
+      if (!reminder.isAfter(now)) continue;
+      final rawId =
+          (event['id'] ?? event['title'] ?? startsAt.toIso8601String())
+              .toString();
+      final subjectData = event['subjects'];
+      final subject =
+          subjectData is Map ? (subjectData['name_en'] ?? '').toString() : '';
+      final type = switch (event['event_type']) {
+        'exam' => 'امتحان قادم',
+        'assignment' || 'deadline' => 'موعد تسليم قادم',
+        'quiz' => 'اختبار قصير قادم',
+        _ => 'تذكير أكاديمي',
+      };
+      final title = (event['title'] ?? 'حدث أكاديمي').toString();
+      await _plugin.zonedSchedule(
+        _stableId('academic-$rawId'),
+        type,
+        subject.isEmpty ? title : '$title — $subject',
+        reminder,
+        details,
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       );
     }
   }
