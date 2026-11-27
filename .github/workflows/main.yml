@@ -5,6 +5,10 @@ on:
     branches: [main, master]
     paths:
       - '**'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - '**'
 permissions:
   contents: read
 concurrency:

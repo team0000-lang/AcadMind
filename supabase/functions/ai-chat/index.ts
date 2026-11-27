@@ -186,7 +186,8 @@ Deno.serve(async (request) => {
         .from("knowledge_chunks").select("id").eq("subject_id", body.subjectId).limit(1).maybeSingle();
 
       if (chunkCheckError) {
-        console.warn("Knowledge availability check skipped", chunkCheckError.message);
+        console.error("Knowledge availability check failed", chunkCheckError.message);
+        return json({ error: "تعذر فحص مكتبة المواد حالياً. لم يتم إرسال إجابة بدون التحقق من المصادر؛ حاول مرة أخرى." }, 503);
       } else if (availableChunk) {
         try {
           const vector = await embedQuery(body.question.trim());
@@ -203,10 +204,11 @@ Deno.serve(async (request) => {
             `[Source ${i + 1}: ${row.document_name ?? "Course document"}${row.page_number ? `, page ${row.page_number}` : ""}]\n${String(row.content).slice(0, 3500)}`
           ).join("\n\n").slice(0, 11000);
         } catch (retrievalError) {
-          // Course retrieval is optional: a temporary embedding or vector-search
-          // issue should not prevent the student from receiving a general answer.
-          console.warn("Course retrieval skipped; continuing without sources",
+          // If indexed course material exists, never silently downgrade to an
+          // unsupported general answer when retrieval fails.
+          console.error("Course retrieval failed",
             retrievalError instanceof Error ? retrievalError.message : "unknown error");
+          return json({ error: "تعذر استرجاع محتوى المادة من مكتبة AI. لم يتم إنشاء إجابة غير موثقة. أعد المحاولة بعد قليل." }, 503);
         }
       }
     }
