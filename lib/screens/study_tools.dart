@@ -253,7 +253,22 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
       Map<String,dynamic>? structured;
       if(task=='quiz'||task=='flashcards'){
         try{
-          var raw=text.trim().replaceAll(RegExp(r'^\\s*```(?:json)?\\s*|\\s*```\\s*
+          var raw=text.trim();
+          final fence=String.fromCharCode(96)*3;
+          if(raw.startsWith(fence)){
+            raw=raw.substring(3).trim();
+            if(raw.startsWith('json'))raw=raw.substring(4).trim();
+          }
+          if(raw.endsWith(fence))raw=raw.substring(0,raw.length-3).trim();
+          final start=raw.indexOf('{');
+          final end=raw.lastIndexOf('}');
+          if(start>=0&&end>start){
+            final parsed=jsonDecode(raw.substring(start,end+1));
+            if(parsed is Map)structured=Map<String,dynamic>.from(parsed);
+          }
+        }catch(_){structured=null;}
+      }
+      if(mounted)setState((){answer=text;sources=retrieved;practiceData=structured;});
     }on FunctionException catch(e){
       final detail=e.details is Map
           ? ((e.details as Map)['error']??(e.details as Map)['message']??'').toString()
