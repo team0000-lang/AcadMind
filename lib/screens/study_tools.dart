@@ -303,6 +303,14 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
     ]));
   }
 
+  Future<void> _reviewGeneratedCard(String difficulty) async {
+    final titleKey=(practiceData?['title']??widget.tool.title).toString().replaceAll(RegExp(r'[^a-zA-Z0-9_-]'),'_');
+    final key='ai:$titleKey:${subjectId??'general'}:$practiceIndex';
+    try{await supabase.from('flashcard_reviews').upsert({'user_id':supabase.auth.currentUser!.id,'card_key':key,'difficulty':difficulty,'reviewed_at':DateTime.now().toUtc().toIso8601String()});}
+    catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('تعذر حفظ مستوى المراجعة: $e')));}
+    if(mounted)setState((){practiceIndex++;revealPractice=false;});
+  }
+
   Widget _buildInteractiveFlashcards(ColorScheme colors) {
     final cards=List<Map<String,dynamic>>.from((practiceData!['cards'] as List).whereType<Map>().map((e)=>Map<String,dynamic>.from(e)));
     if(cards.isEmpty)return const Text('لم يتم إنشاء بطاقات قابلة للمراجعة.');
@@ -319,7 +327,7 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
         Text(revealPractice?'الإجابة':'اضغط لإظهار الإجابة',style:TextStyle(color:colors.primary,fontWeight:FontWeight.w900)),const SizedBox(height:10),
         Text('${revealPractice?card['back']:card['front']}',textAlign:TextAlign.center,style:const TextStyle(fontSize:17,fontWeight:FontWeight.w800)),
       ]))),
-      if(revealPractice)Padding(padding:const EdgeInsets.only(top:14),child:FilledButton.icon(onPressed:()=>setState((){practiceIndex++;revealPractice=false;}),icon:const Icon(Icons.arrow_forward_rounded),label:const Text('البطاقة التالية'))),
+      if(revealPractice)Padding(padding:const EdgeInsets.only(top:14),child:Column(children:[const Text('قيّم مدى تذكرك للإجابة',style:TextStyle(fontWeight:FontWeight.w800)),const SizedBox(height:8),Row(children:[Expanded(child:OutlinedButton(onPressed:()=>_reviewGeneratedCard('difficult'),child:const Text('صعب'))),const SizedBox(width:6),Expanded(child:OutlinedButton(onPressed:()=>_reviewGeneratedCard('normal'),child:const Text('متوسط'))),const SizedBox(width:6),Expanded(child:FilledButton(onPressed:()=>_reviewGeneratedCard('known'),child:const Text('متقن')))])])),
     ]);
   }
 
