@@ -99,8 +99,10 @@ Deno.serve(async (request) => {
     if (downloadError || !file) throw new Error("Unable to download private course document");
     stage = "extract_text";
     const extracted = await extractText(file, doc.mime_type, doc.storage_path);
-    const cleaned = extracted.text.replaceAll("\u0000", "").replace(/[\t ]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
-    if (!cleaned || cleaned.length > 1_000_000) throw new Error("Extracted text is empty or exceeds the 1 MB processing limit");
+    const cleaned = extracted.text.replaceAll("\\u0000", "").replace(/[\\t ]+\\n/g, "\\n").replace(/\\n{3,}/g, "\\n\\n").trim();
+    stage = "validate_extracted_text";
+    if (!cleaned) throw new Error("No selectable text was extracted. This PDF may be scanned; OCR is required before it can be indexed.");
+    if (cleaned.length > 1_000_000) throw new Error("Extracted text exceeds the 1 MB processing limit");
     stage = "chunk_text";
     const chunks: Array<{ content: string; index: number; page_number: number | null }> = []; const size = 1400; const overlap = 180;
     for (let start = 0; start < cleaned.length && chunks.length < 800;) {
@@ -145,7 +147,7 @@ Deno.serve(async (request) => {
       error: "Document processing failed. The file was not marked as ready.",
       stage,
       detail: detail.slice(0, 500),
-      retryable: stage !== "extract_text" || !detail.toLowerCase().includes("unsupported"),
+      retryable: !(stage === "validate_extracted_text" && detail.toLowerCase().includes("scanned")),
     }, 502);
   }
 });
