@@ -52,6 +52,8 @@ class StudyToolsPage extends StatelessWidget {
         const SizedBox(height:16),
         const StudySessionCard(),
         const SizedBox(height:12),
+        const RecentStudyActivity(),
+        const SizedBox(height:12),
         OutlinedButton.icon(onPressed:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>const StudyLibraryPage())),icon:const Icon(Icons.bookmarks_rounded),label:const Text('افتح مكتبتي الدراسية'),style:OutlinedButton.styleFrom(minimumSize:const Size.fromHeight(48),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(15)))),
         const SizedBox(height:22),
         Row(children:[const Expanded(child:Text('كل أدواتك في مكان واحد',style:TextStyle(fontSize:18,fontWeight:FontWeight.w900))),Text('8 TOOLS',style:TextStyle(color:colors.onSurfaceVariant,fontSize:10,fontWeight:FontWeight.w800,letterSpacing:1))]),
@@ -95,6 +97,17 @@ class _StudySessionCardState extends State<StudySessionCard>{
   }
   @override void dispose(){ticker?.cancel();title.dispose();super.dispose();}
   @override Widget build(BuildContext context){final colors=Theme.of(context).colorScheme;final running=watch.isRunning;return Container(padding:const EdgeInsets.all(16),decoration:BoxDecoration(color:colors.primaryContainer.withValues(alpha:.42),borderRadius:BorderRadius.circular(22),border:Border.all(color:colors.primary.withValues(alpha:.12))),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Row(children:[Icon(Icons.timer_rounded,color:colors.primary),const SizedBox(width:8),const Expanded(child:Text('جلسة مذاكرة مركّزة',style:TextStyle(fontWeight:FontWeight.w900,fontSize:15))),Text(elapsed,style:const TextStyle(fontWeight:FontWeight.w900,fontSize:18))]),const SizedBox(height:8),TextField(controller:title,enabled:!running&&!saving,decoration:const InputDecoration(isDense:true,labelText:'اسم الجلسة',prefixIcon:Icon(Icons.edit_note_rounded))),const SizedBox(height:12),Row(children:[Expanded(child:FilledButton.icon(onPressed:running||saving?null:start,icon:const Icon(Icons.play_arrow_rounded),label:const Text('ابدأ'))),const SizedBox(width:8),Expanded(child:OutlinedButton.icon(onPressed:running&&!saving?stopAndSave:null,icon:saving?const SizedBox(width:16,height:16,child:CircularProgressIndicator(strokeWidth:2)):const Icon(Icons.stop_rounded),label:const Text('إنهاء وحفظ')))])]));}
+}
+
+class RecentStudyActivity extends StatefulWidget {
+  const RecentStudyActivity({super.key});
+  @override State<RecentStudyActivity> createState()=>_RecentStudyActivityState();
+}
+class _RecentStudyActivityState extends State<RecentStudyActivity>{
+  late Future<List<Map<String,dynamic>>> future;
+  @override void initState(){super.initState();future=load();}
+  Future<List<Map<String,dynamic>>> load()async=>List<Map<String,dynamic>>.from(await supabase.from('study_library_items').select('id,title,item_type,created_at').order('created_at',ascending:false).limit(3));
+  @override Widget build(BuildContext context){final colors=Theme.of(context).colorScheme;return FutureBuilder<List<Map<String,dynamic>>>(future:future,builder:(context,s){if(s.connectionState!=ConnectionState.done||!s.hasData||s.data!.isEmpty)return const SizedBox.shrink();return Container(padding:const EdgeInsets.all(14),decoration:BoxDecoration(color:Theme.of(context).cardColor,borderRadius:BorderRadius.circular(18),border:Border.all(color:colors.outlineVariant.withValues(alpha:.55))),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Row(children:[const Expanded(child:Text('آخر ما حفظته',style:TextStyle(fontWeight:FontWeight.w900))),TextButton(onPressed:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>const StudyLibraryPage())),child:const Text('عرض الكل'))]),...s.data!.map((x)=>ListTile(dense:true,contentPadding:EdgeInsets.zero,leading:Icon(Icons.bookmark_added_rounded,color:colors.primary),title:Text('${x['title']}',maxLines:1,overflow:TextOverflow.ellipsis,style:const TextStyle(fontSize:12,fontWeight:FontWeight.w700)),subtitle:Text('${x['item_type']}',style:TextStyle(fontSize:10,color:colors.onSurfaceVariant))))]));});}
 }
 
 class _ToolCard extends StatelessWidget {
