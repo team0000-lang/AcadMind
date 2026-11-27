@@ -105,8 +105,21 @@ class ToolWorkspacePage extends StatefulWidget {
 class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
   final controller=TextEditingController();
   bool busy=false;
+  bool loadingSubjects=true;
   String? answer;
+  String? subjectId;
+  List<Map<String,dynamic>> subjects=[];
   PlatformFile? pdfFile;
+  @override void initState(){super.initState();loadSubjects();}
+  Future<void> loadSubjects() async {
+    try {
+      final rows=await supabase.from('subjects').select('id,name_en').eq('is_active',true).isFilter('deleted_at',null).order('name_en');
+      if(!mounted)return;
+      setState(()=>subjects=List<Map<String,dynamic>>.from(rows));
+    } catch (_) {
+      if(mounted) setState(()=>subjects=[]);
+    } finally { if(mounted)setState(()=>loadingSubjects=false); }
+  }
   @override void dispose(){controller.dispose();super.dispose();}
   Future<void> pickPdf() async {
     final result=await FilePicker.platform.pickFiles(type:FileType.custom,allowedExtensions:['pdf'],withData:true);
@@ -119,6 +132,7 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
   Future<void> generate()async{
     final value=controller.text.trim();
     if(value.isEmpty && !(widget.tool.title=='PDF Analyzer' && pdfFile!=null)){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('اكتب المحتوى أو اختر ملف PDF أولاً')));return;}
+    if(widget.tool.title=='AI Study Assistant' && subjectId==null){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('اختر المادة أولاً حتى يستطيع المساعد الرجوع إلى ملفاتها ومصادرها.')));return;}
     final session = supabase.auth.currentSession;
     if(session == null){
       setState(()=>answer='جلسة الدخول غير موجودة. سجّل الدخول مرة أخرى لاستخدام أدوات الذكاء الاصطناعي.');
@@ -142,7 +156,8 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
         body:{
         'question':'${widget.tool.prompt}\n\nمدخلات الطالب:\n${value.isEmpty?'حلل الملف المرفق بالكامل واستخرج أهم النقاط والأسئلة.':value}',
         'task':task,
-        'retrieve':false,
+        'subjectId':subjectId,
+        'retrieve':subjectId!=null,
         if(widget.tool.title=='PDF Analyzer' && pdfFile!=null) 'fileBase64':base64Encode(pdfFile!.bytes!),
         if(widget.tool.title=='PDF Analyzer' && pdfFile!=null) 'fileMimeType':'application/pdf',
         if(widget.tool.title=='PDF Analyzer' && pdfFile!=null) 'fileName':pdfFile!.name,
@@ -171,6 +186,16 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
       body:ListView(padding:const EdgeInsets.all(16),children:[
         Container(padding:const EdgeInsets.all(18),decoration:BoxDecoration(color:widget.tool.color.withValues(alpha:.10),borderRadius:BorderRadius.circular(22)),child:Row(children:[Container(width:48,height:48,decoration:BoxDecoration(color:widget.tool.color.withValues(alpha:.16),borderRadius:BorderRadius.circular(15)),child:Icon(widget.tool.icon,color:widget.tool.color,size:25)),const SizedBox(width:13),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(widget.tool.title,style:const TextStyle(fontSize:16,fontWeight:FontWeight.w900)),const SizedBox(height:4),Text(widget.tool.subtitle,style:TextStyle(color:colors.onSurfaceVariant,fontSize:11))]))])),
         const SizedBox(height:18),
+        DropdownButtonFormField<String>(
+          value: subjectId,
+          isExpanded: true,
+          decoration: const InputDecoration(labelText:'المادة الدراسية',prefixIcon:Icon(Icons.menu_book_rounded)),
+          items: subjects.map((s)=>DropdownMenuItem<String>(value:'${s['id']}',child:Text('${s['name_en']}'))).toList(),
+          onChanged: busy ? null : (value)=>setState(()=>subjectId=value),
+        ),
+        if(loadingSubjects) const Padding(padding:EdgeInsets.only(top:8),child:LinearProgressIndicator()),
+        if(!loadingSubjects && subjects.isEmpty) const Padding(padding:EdgeInsets.only(top:8),child:Text('لا توجد مواد متاحة أو تعذر تحميلها. يمكنك المحاولة لاحقاً.',style:TextStyle(fontSize:11))),
+        const SizedBox(height:14),
         Text(widget.tool.title=='PDF Analyzer'?'محتوى ملف PDF':'المحتوى أو التفاصيل',style:const TextStyle(fontWeight:FontWeight.w800,fontSize:14)),
         const SizedBox(height:8),
         TextField(controller:controller,minLines:7,maxLines:14,textDirection:TextDirection.rtl,decoration:InputDecoration(hintText:widget.tool.hint,alignLabelWithHint:true)),
