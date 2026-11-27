@@ -139,7 +139,7 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
       setState(()=>answer='جلسة الدخول غير موجودة. سجّل الدخول مرة أخرى لاستخدام أدوات الذكاء الاصطناعي.');
       return;
     }
-    setState(()=>{busy=true,answer=null,sources=[]});
+    setState(() { busy = true; answer = null; sources = []; });
     try{
       final task = switch (widget.tool.title) {
         'AI Study Assistant' => 'chat',
@@ -166,7 +166,7 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
       final data=Map<String,dynamic>.from(result.data as Map);
       final text=(data['answer']??data['error']??'لم يصل رد من المساعد.').toString();
       final retrieved=data['sources'] is List ? List<Map<String,dynamic>>.from((data['sources'] as List).whereType<Map>().map((e)=>Map<String,dynamic>.from(e))) : <Map<String,dynamic>>[];
-      if(mounted)setState(()=>{answer=text,sources=retrieved});
+      if(mounted)setState(() { answer = text; sources = retrieved; });
     }on FunctionException catch(e){
       final detail=e.details is Map
           ? ((e.details as Map)['error']??(e.details as Map)['message']??'').toString()
