@@ -929,70 +929,6 @@ class _SubjectsAdminState extends State<SubjectsAdmin> {
     });
   }
 
-  Future<void> retryDocument(Map<String, dynamic> doc) async {
-    final session = supabase.auth.currentSession;
-    if (session == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('جلسة المالك انتهت. سجّل الدخول مرة أخرى.')));
-      return;
-    }
-    setState(() => busy = true);
-    try {
-      await supabase.from('knowledge_documents').update({'status': 'processing'}).eq('id', doc['id']);
-      final result = await supabase.functions.invoke('ingest-knowledge',
-        headers: {'Authorization': 'Bearer ${session.accessToken}'},
-        body: {'documentId': doc['id']});
-      if (result.status < 200 || result.status >= 300) {
-        final data = result.data is Map ? Map<String, dynamic>.from(result.data as Map) : <String, dynamic>{};
-        throw Exception(data['error'] ?? 'HTTP ${result.status}');
-      }
-      final data = Map<String, dynamic>.from(result.data as Map);
-      if (data['status'] != 'ready' || (data['chunks'] as num? ?? 0) <= 0) {
-        throw Exception('لم يتم إنشاء مقاطع معرفة صالحة لهذا الملف.');
-      }
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تمت المعالجة بنجاح • ${data['chunks']} مقطع')));
-      reload();
-    } catch (e) {
-      try { await supabase.from('knowledge_documents').update({'status': 'failed'}).eq('id', doc['id']); } catch (_) {}
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('فشلت إعادة المعالجة: $e')));
-      reload();
-    } finally { if (mounted) setState(() => busy = false); }
-  }
-
-  Future<void> testDocument(Map<String, dynamic> doc) async {
-    final question = TextEditingController();
-    String? resultText;
-    bool testing = false;
-    await showDialog<void>(context: context, builder: (ctx) => StatefulBuilder(builder: (ctx, setD) => AlertDialog(
-      title: const Text('اختبار معرفة الملف'),
-      content: SizedBox(width: 440, child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Text('اختبر هل يستطيع المساعد استرجاع معلومات من ${doc['document_name']}'),
-        const SizedBox(height: 12),
-        TextField(controller: question, minLines: 2, maxLines: 4, decoration: const InputDecoration(hintText: 'اكتب سؤالاً إجابته موجودة داخل الملف')),
-        if (resultText != null) ...[const SizedBox(height: 12), SelectableText(resultText!, style: const TextStyle(fontSize: 12))],
-      ])),
-      actions: [
-        TextButton(onPressed: testing ? null : () => Navigator.pop(ctx), child: const Text('إغلاق')),
-        FilledButton(onPressed: testing ? null : () async {
-          if (question.text.trim().isEmpty) return;
-          final session = supabase.auth.currentSession;
-          if (session == null) { setD(() => resultText = 'جلسة الدخول انتهت.'); return; }
-          setD(() { testing = true; resultText = null; });
-          try {
-            final response = await supabase.functions.invoke('ai-chat',
-              headers: {'Authorization': 'Bearer ${session.accessToken}'},
-              body: {'question': question.text.trim(), 'subjectId': doc['subject_id'], 'lectureId': doc['lecture_id'], 'retrieve': true, 'task': 'chat'});
-            final data = Map<String, dynamic>.from(response.data as Map);
-            final sources = data['sources'] is List ? List.from(data['sources'] as List) : [];
-            final answer = (data['answer'] ?? data['error'] ?? 'لا يوجد رد').toString();
-            setD(() => resultText = sources.isEmpty ? 'لم يتم العثور على مصادر من الملف.\n\n$answer' : 'تم العثور على ${sources.length} مصدر.\n\n$answer\n\nالمصادر: ${sources.map((s) => '${s['documentName']} • صفحة ${s['page'] ?? 'غير محددة'}').join('، ')}');
-          } catch (e) { setD(() => resultText = 'فشل الاختبار: $e'); }
-          finally { setD(() => testing = false); }
-        }, child: testing ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('اختبر الآن')),
-      ],
-    )));
-    question.dispose();
-  }
-
   @override
   Widget build(BuildContext c) => FutureBuilder<List<Map<String, dynamic>>>(
       future: future,
@@ -1491,6 +1427,70 @@ class _KnowledgeAdminState extends State<KnowledgeAdmin> {
     } finally {
       if (mounted) setState(() => busy = false);
     }
+  }
+
+  Future<void> retryDocument(Map<String, dynamic> doc) async {
+    final session = supabase.auth.currentSession;
+    if (session == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('جلسة المالك انتهت. سجّل الدخول مرة أخرى.')));
+      return;
+    }
+    setState(() => busy = true);
+    try {
+      await supabase.from('knowledge_documents').update({'status': 'processing'}).eq('id', doc['id']);
+      final result = await supabase.functions.invoke('ingest-knowledge',
+        headers: {'Authorization': 'Bearer ${session.accessToken}'},
+        body: {'documentId': doc['id']});
+      if (result.status < 200 || result.status >= 300) {
+        final data = result.data is Map ? Map<String, dynamic>.from(result.data as Map) : <String, dynamic>{};
+        throw Exception(data['error'] ?? 'HTTP ${result.status}');
+      }
+      final data = Map<String, dynamic>.from(result.data as Map);
+      if (data['status'] != 'ready' || (data['chunks'] as num? ?? 0) <= 0) {
+        throw Exception('لم يتم إنشاء مقاطع معرفة صالحة لهذا الملف.');
+      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تمت المعالجة بنجاح • ${data['chunks']} مقطع')));
+      reload();
+    } catch (e) {
+      try { await supabase.from('knowledge_documents').update({'status': 'failed'}).eq('id', doc['id']); } catch (_) {}
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('فشلت إعادة المعالجة: $e')));
+      reload();
+    } finally { if (mounted) setState(() => busy = false); }
+  }
+
+  Future<void> testDocument(Map<String, dynamic> doc) async {
+    final question = TextEditingController();
+    String? resultText;
+    bool testing = false;
+    await showDialog<void>(context: context, builder: (ctx) => StatefulBuilder(builder: (ctx, setD) => AlertDialog(
+      title: const Text('اختبار معرفة الملف'),
+      content: SizedBox(width: 440, child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Text('اختبر هل يستطيع المساعد استرجاع معلومات من ${doc['document_name']}'),
+        const SizedBox(height: 12),
+        TextField(controller: question, minLines: 2, maxLines: 4, decoration: const InputDecoration(hintText: 'اكتب سؤالاً إجابته موجودة داخل الملف')),
+        if (resultText != null) ...[const SizedBox(height: 12), SelectableText(resultText!, style: const TextStyle(fontSize: 12))],
+      ])),
+      actions: [
+        TextButton(onPressed: testing ? null : () => Navigator.pop(ctx), child: const Text('إغلاق')),
+        FilledButton(onPressed: testing ? null : () async {
+          if (question.text.trim().isEmpty) return;
+          final session = supabase.auth.currentSession;
+          if (session == null) { setD(() => resultText = 'جلسة الدخول انتهت.'); return; }
+          setD(() { testing = true; resultText = null; });
+          try {
+            final response = await supabase.functions.invoke('ai-chat',
+              headers: {'Authorization': 'Bearer ${session.accessToken}'},
+              body: {'question': question.text.trim(), 'subjectId': doc['subject_id'], 'lectureId': doc['lecture_id'], 'retrieve': true, 'task': 'chat'});
+            final data = Map<String, dynamic>.from(response.data as Map);
+            final sources = data['sources'] is List ? List.from(data['sources'] as List) : [];
+            final answer = (data['answer'] ?? data['error'] ?? 'لا يوجد رد').toString();
+            setD(() => resultText = sources.isEmpty ? 'لم يتم العثور على مصادر من الملف.\n\n$answer' : 'تم العثور على ${sources.length} مصدر.\n\n$answer\n\nالمصادر: ${sources.map((s) => '${s['documentName']} • صفحة ${s['page'] ?? 'غير محددة'}').join('، ')}');
+          } catch (e) { setD(() => resultText = 'فشل الاختبار: $e'); }
+          finally { setD(() => testing = false); }
+        }, child: testing ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('اختبر الآن')),
+      ],
+    )));
+    question.dispose();
   }
 
   @override
