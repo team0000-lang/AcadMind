@@ -2196,12 +2196,14 @@ class _AiPageState extends State<AiPage> {
             ? 'جلسة الدخول غير موجودة أو انتهت. سجّل الخروج ثم ادخل إلى حسابك مرة أخرى.'
             : (e.status == 504
                 ? 'خدمة Gemini اتأخرت في الرد. جرّب سؤالًا أقصر بعد لحظات.'
+                : ((e.status == 502 || e.status == 503)
+                    ? 'المساعد مضغوط مؤقتًا ولم ينجح الاتصال بالنموذج الاحتياطي. جرّب مرة أخرى بعد لحظات.'
                 : (detailText.contains('GEMINI_API_KEY') ||
                         detailText.toLowerCase().contains('not configured')
                     ? 'خدمة الذكاء الاصطناعي غير مهيأة على الخادم بعد. راجع إعداد GEMINI_API_KEY في Supabase Secrets.'
                     : (detailText.isEmpty
                         ? (e.reasonPhrase ?? 'حاول مرة أخرى.')
-                        : detailText)));
+                        : detailText))));
         setState(
           () => messages.add({
             'role': 'assistant',

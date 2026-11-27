@@ -9,10 +9,21 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
 const env = (key: string) => Deno.env.get(key) ?? "";
 
-async function gemini(contents: unknown[], systemInstruction: string) {
-  const key = env("GEMINI_API_KEY");
-  if (!key) throw new Error("GEMINI_API_KEY is not configured");
-  const model = env("GEMINI_CHAT_MODEL") || "gemini-3.8-flash";
+class GeminiHttpError extends Error {
+  constructor(readonly status: number) {
+    super(`Gemini API returned ${status}`);
+  }
+}
+
+function isTransientGeminiError(error: unknown) {
+  if (error instanceof GeminiHttpError) {
+    return error.status === 408 || error.status === 429 || error.status >= 500;
+  }
+  return error instanceof TypeError ||
+    (error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError"));
+}
+
+async function generateWithModel(model: string, key: string, contents: unknown[], systemInstruction: string) {
   const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: "POST",
     headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
@@ -21,12 +32,12 @@ async function gemini(contents: unknown[], systemInstruction: string) {
       contents,
       generationConfig: { temperature: 0.25, maxOutputTokens: 1100 },
     }),
-    signal: AbortSignal.timeout(45_000),
+    signal: AbortSignal.timeout(20_000),
   });
   if (!response.ok) {
     const detail = await response.text();
-    console.error("Gemini API error", response.status, detail.slice(0, 500));
-    throw new Error(`Gemini API returned ${response.status}`);
+    console.error(`Gemini API error (${model})`, response.status, detail.slice(0, 500));
+    throw new GeminiHttpError(response.status);
   }
   const data = await response.json();
   const answer = (data?.candidates?.[0]?.content?.parts ?? [])
@@ -34,6 +45,27 @@ async function gemini(contents: unknown[], systemInstruction: string) {
     .map((part: Record<string, unknown>) => part.text as string).join("\n").trim();
   if (!answer) throw new Error("Gemini returned an empty response");
   return { answer, usage: data?.usageMetadata ?? null };
+}
+
+async function gemini(contents: unknown[], systemInstruction: string) {
+  const key = env("GEMINI_API_KEY");
+  if (!key) throw new Error("GEMINI_API_KEY is not configured");
+  const primaryModel = env("GEMINI_CHAT_MODEL") || "gemini-3.1-flash-lite";
+  const fallbackModel = env("GEMINI_FALLBACK_MODEL") ||
+    (primaryModel === "gemini-3.1-flash-lite" ? "gemini-3.8-flash" : "gemini-3.1-flash-lite");
+  try {
+    return await generateWithModel(primaryModel, key, contents, systemInstruction);
+  } catch (primaryError) {
+    if (!isTransientGeminiError(primaryError) || fallbackModel === primaryModel) throw primaryError;
+    console.warn(`Gemini primary model ${primaryModel} unavailable; trying ${fallbackModel}`);
+    try {
+      return await generateWithModel(fallbackModel, key, contents, systemInstruction);
+    } catch (fallbackError) {
+      if (!isTransientGeminiError(fallbackError)) throw fallbackError;
+      await new Promise((resolve) => setTimeout(resolve, 700 + Math.random() * 500));
+      return await generateWithModel(fallbackModel, key, contents, systemInstruction);
+    }
+  }
 }
 
 async function embedQuery(text: string) {
