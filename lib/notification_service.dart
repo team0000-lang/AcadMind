@@ -1,4 +1,5 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -8,6 +9,9 @@ class NotificationService {
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
   bool _ready = false;
+
+  static const _scheduleIdsKey = 'acadmind_schedule_notification_ids';
+  static const _eventIdsKey = 'acadmind_academic_notification_ids';
 
   Future<void> initialize() async {
     if (_ready) return;
@@ -30,14 +34,54 @@ class NotificationService {
         (sum, unit) => (sum * 31 + unit) & 0x7fffffff,
       );
 
+  Future<bool> _enabled(String key, bool fallback) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(key) ?? fallback;
+  }
+
+  Future<int> _reminderMinutes() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt('notification_reminder_minutes') ?? 10;
+  }
+
+  Future<void> _cancelStoredIds(String key) async {
+    final prefs = await SharedPreferences.getInstance();
+    final ids = prefs.getStringList(key) ?? const <String>[];
+    for (final raw in ids) {
+      final id = int.tryParse(raw);
+      if (id != null) await _plugin.cancel(id);
+    }
+    await prefs.remove(key);
+  }
+
+  Future<void> _saveIds(String key, List<int> ids) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+      key,
+      ids.map((id) => id.toString()).toList(),
+    );
+  }
+
   Future<void> syncSchedule(List<Map<String, dynamic>> rows) async {
     await initialize();
-    await _plugin.cancelAll();
+
+    // Never use cancelAll() here: it would erase AI, announcement and
+    // academic-event notifications. Cancel only the IDs owned by Schedule.
+    await _cancelStoredIds(_scheduleIdsKey);
+
+    final prefs = await SharedPreferences.getInstance();
+    final beforeEnabled =
+        prefs.getBool('notification_lecture_before_enabled') ?? true;
+    final startEnabled =
+        prefs.getBool('notification_class_start_enabled') ?? true;
+    final reminderMinutes =
+        prefs.getInt('notification_reminder_minutes') ?? 10;
+
     const beforeDetails = NotificationDetails(
       android: AndroidNotificationDetails(
         'acadmind_lecture_before',
         'تذكير قبل المحاضرة',
-        channelDescription: 'تنبيه قبل المحاضرة أو السكشن بعشر دقائق',
+        channelDescription: 'تنبيه قبل المحاضرة أو السكشن قبل الموعد المحدد',
         importance: Importance.high,
         priority: Priority.high,
       ),
@@ -54,13 +98,18 @@ class NotificationService {
       iOS: DarwinNotificationDetails(),
     );
 
+    if (!beforeEnabled && !startEnabled) return;
+
     final now = tz.TZDateTime.now(tz.local);
+    final scheduledIds = <int>[];
+
     for (final row in rows) {
       if (row['is_active'] == false || row['deleted_at'] != null) continue;
 
-      final day = (row['day_of_week'] as num).toInt();
-      final timeParts = (row['starts_at'] as String).split(':');
-      if (timeParts.length < 2) continue;
+      final day = (row['day_of_week'] as num?)?.toInt();
+      final startsAt = row['starts_at']?.toString() ?? '';
+      final timeParts = startsAt.split(':');
+      if (day == null || timeParts.length < 2) continue;
 
       final hour = int.tryParse(timeParts[0]);
       final minute = int.tryParse(timeParts[1]);
@@ -76,49 +125,66 @@ class NotificationService {
         hour,
         minute,
       );
-      // If today's lesson has already started, target the next weekly occurrence.
+
       if (!lecture.isAfter(now)) {
         lecture = lecture.add(const Duration(days: 7));
       }
 
-      var reminder = lecture.subtract(const Duration(minutes: 10));
-      // If the student opens the app less than 10 minutes before a lesson,
-      // keep the start alert for today and move only the early warning to next week.
-      if (!reminder.isAfter(now)) {
-        reminder = reminder.add(const Duration(days: 7));
-      }
-
+      final reminder = lecture.subtract(Duration(minutes: reminderMinutes));
       final subjectData = row['subjects'];
       final subject = subjectData is Map
-          ? (subjectData['name_en'] ?? 'محاضرتك').toString()
-          : 'محاضرتك';
+          ? (subjectData['name_en'] ?? 'Your class').toString()
+          : 'Your class';
       final location = (row['location'] ?? '').toString();
       final where = location.isEmpty ? '' : ' — $location';
+      final classType = (row['class_type'] ?? 'lecture').toString();
+      final typeLabel = switch (classType.toLowerCase()) {
+        'section' => 'Section',
+        'practical' => 'Practical',
+        'lab' => 'Lab',
+        'tutorial' => 'Tutorial',
+        _ => 'Lecture',
+      };
       final rowId = (row['id'] ?? '$day-$hour-$minute').toString();
 
-      await _plugin.zonedSchedule(
-        _stableId('$rowId-before'),
-        'استعد للمحاضرة',
-        'فاضل 10 دقائق على $subject$where',
-        reminder,
-        beforeDetails,
-        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-        matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
-      );
-      await _plugin.zonedSchedule(
-        _stableId('$rowId-start'),
-        'بدأ موعد المحاضرة',
-        '$subject تبدأ الآن$where',
-        lecture,
-        startDetails,
-        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-        matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
-      );
+      if (beforeEnabled && reminder.isAfter(now)) {
+        final id = _stableId('$rowId-before');
+        await _plugin.zonedSchedule(
+          id,
+          'استعد للـ $typeLabel',
+          'فاضل $reminderMinutes دقيقة على $subject$where',
+          reminder,
+          beforeDetails,
+          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+          matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
+        );
+        scheduledIds.add(id);
+      }
+
+      if (startEnabled) {
+        final id = _stableId('$rowId-start');
+        await _plugin.zonedSchedule(
+          id,
+          'بدأ الـ $typeLabel',
+          '$subject يبدأ الآن$where',
+          lecture,
+          startDetails,
+          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+          matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
+        );
+        scheduledIds.add(id);
+      }
     }
+
+    await _saveIds(_scheduleIdsKey, scheduledIds);
   }
 
   Future<void> syncAcademicEvents(List<Map<String, dynamic>> events) async {
     await initialize();
+    final enabled = await _enabled('notification_academic_events_enabled', true);
+    await _cancelStoredIds(_eventIdsKey);
+    if (!enabled) return;
+
     final now = tz.TZDateTime.now(tz.local);
     const details = NotificationDetails(
       android: AndroidNotificationDetails(
@@ -131,19 +197,23 @@ class NotificationService {
       ),
       iOS: DarwinNotificationDetails(),
     );
+
+    final scheduledIds = <int>[];
     for (final event in events) {
       final minutes = (event['reminder_minutes'] as num?)?.toInt() ?? 0;
       if (minutes <= 0 || event['is_active'] == false) continue;
-      final startsAt = DateTime.tryParse((event['starts_at'] ?? '').toString());
+      final startsAt =
+          DateTime.tryParse((event['starts_at'] ?? '').toString());
       if (startsAt == null) continue;
-      final reminder = tz.TZDateTime.from(
-        startsAt,
-        tz.local,
-      ).subtract(Duration(minutes: minutes));
+
+      final reminder = tz.TZDateTime.from(startsAt, tz.local)
+          .subtract(Duration(minutes: minutes));
       if (!reminder.isAfter(now)) continue;
+
       final rawId =
           (event['id'] ?? event['title'] ?? startsAt.toIso8601String())
               .toString();
+      final id = _stableId('academic-$rawId');
       final subjectData = event['subjects'];
       final subject =
           subjectData is Map ? (subjectData['name_en'] ?? '').toString() : '';
@@ -154,14 +224,18 @@ class NotificationService {
         _ => 'تذكير أكاديمي',
       };
       final title = (event['title'] ?? 'حدث أكاديمي').toString();
+
       await _plugin.zonedSchedule(
-        _stableId('academic-$rawId'),
+        id,
         type,
         subject.isEmpty ? title : '$title — $subject',
         reminder,
         details,
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       );
+      scheduledIds.add(id);
     }
+
+    await _saveIds(_eventIdsKey, scheduledIds);
   }
 }
