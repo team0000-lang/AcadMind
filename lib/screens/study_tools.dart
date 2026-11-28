@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../backend.dart';
 import '../services.dart';
 import 'study_library.dart';
+import 'pdf_translator.dart';
 
 class _StudyTool {
   final String title, subtitle, prompt, hint;
@@ -18,6 +19,7 @@ class _StudyTool {
 const _studyTools = <_StudyTool>[
   _StudyTool('AI Study Assistant','مساعدك لتنظيم المذاكرة والإجابة عن أسئلتك','أنت مساعد مذاكرة أكاديمي. ساعد الطالب في السؤال التالي بإجابة واضحة وخطوات عملية:','اكتب سؤالك أو هدفك الدراسي...',Icons.auto_awesome_rounded,Color(0xFF7768F8)),
   _StudyTool('PDF Analyzer','حلّل محتوى ملفات المحاضرات','حلّل النص الأكاديمي التالي كما لو كان مستخرجاً من ملف PDF. استخرج الفكرة العامة، أهم المفاهيم، التعريفات، النقاط التي تحتاج تركيزاً، وأسئلة للمراجعة. لا تخترع معلومات غير موجودة في النص:','الصق النص المستخرج من ملف PDF هنا...',Icons.picture_as_pdf_rounded,Color(0xFFE36B78)),
+  _StudyTool('PDF Translator','ترجمة مبسطة داخل نفس الصفحة','ترجم صفحة PDF إلى العربية المبسطة مع الحفاظ على أماكن النصوص داخل الصفحة.','اختر ملف PDF ثم ترجم الصفحات واحدة تلو الأخرى...',Icons.translate_rounded,Color(0xFF26A69A)),
   _StudyTool('Smart Summarizer','ملخص منظم بدل صفحات طويلة','لخّص المحتوى التالي باللغة العربية في عناوين ونقاط واضحة، مع الحفاظ على المصطلحات المهمة والأمثلة والتفاصيل التي قد تأتي في الامتحان:','الصق المحاضرة أو النص هنا...',Icons.summarize_rounded,Color(0xFF399A91)),
   _StudyTool('Quiz Generator','اختبر فهمك بأسئلة متنوعة','أنشئ اختباراً تعليمياً من المحتوى التالي: 10 أسئلة متنوعة (اختيار من متعدد وصح وخطأ وأسئلة قصيرة)، ثم ضع نموذج الإجابة في نهاية منفصلة. لا تضف معلومات خارج المحتوى:','الصق محتوى الدرس وحدد مستوى الصعوبة...',Icons.quiz_rounded,Color(0xFFE39A45)),
   _StudyTool('Flashcards','حوّل المفاهيم إلى كروت مراجعة','حوّل المحتوى التالي إلى 12 بطاقة مراجعة. اكتب في كل بطاقة سؤالاً قصيراً ثم الإجابة، واجعل الإجابات دقيقة وسهلة الحفظ:','الصق التعريفات أو محتوى الدرس...',Icons.style_rounded,Color(0xFF4C8BD8)),
@@ -27,6 +29,10 @@ const _studyTools = <_StudyTool>[
 ];
 
 void openStudyTool(BuildContext context, String title, {String? initialPrompt}) {
+  if (title == 'PDF Translator') {
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PdfTranslatorPage()));
+    return;
+  }
   final tool = _studyTools.firstWhere((x) => x.title == title, orElse: () => _studyTools.first);
   Navigator.of(context).push(MaterialPageRoute(builder: (_) => ToolWorkspacePage(tool: tool, initialPrompt: initialPrompt)));
 }
@@ -61,7 +67,7 @@ class StudyToolsPage extends StatelessWidget {
         const SizedBox(height:12),
         OutlinedButton.icon(onPressed:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>const StudyLibraryPage())),icon:const Icon(Icons.bookmarks_rounded),label:const Text('افتح مكتبتي الدراسية'),style:OutlinedButton.styleFrom(minimumSize:const Size.fromHeight(48),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(15)))),
         const SizedBox(height:22),
-        Row(children:[const Expanded(child:Text('كل أدواتك في مكان واحد',style:TextStyle(fontSize:18,fontWeight:FontWeight.w900))),Text('8 TOOLS',style:TextStyle(color:colors.onSurfaceVariant,fontSize:10,fontWeight:FontWeight.w800,letterSpacing:1))]),
+        Row(children:[const Expanded(child:Text('كل أدواتك في مكان واحد',style:TextStyle(fontSize:18,fontWeight:FontWeight.w900))),Text('9 TOOLS',style:TextStyle(color:colors.onSurfaceVariant,fontSize:10,fontWeight:FontWeight.w800,letterSpacing:1))]),
         const SizedBox(height:13),
         GridView.builder(
           shrinkWrap:true,
@@ -70,7 +76,7 @@ class StudyToolsPage extends StatelessWidget {
           gridDelegate:const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount:2,mainAxisSpacing:12,crossAxisSpacing:12,childAspectRatio:1.04),
           itemBuilder:(context,index){
             final tool=_studyTools[index];
-            return _ToolCard(tool:tool,onTap:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>ToolWorkspacePage(tool:tool))));
+            return _ToolCard(tool:tool,onTap:()=>tool.title=='PDF Translator'?Navigator.of(context).push(MaterialPageRoute(builder:(_)=>const PdfTranslatorPage())):Navigator.of(context).push(MaterialPageRoute(builder:(_)=>ToolWorkspacePage(tool:tool))));
           },
         ),
         const SizedBox(height:14),
