@@ -26,6 +26,7 @@ class _PdfTranslatorPageState extends State<PdfTranslatorPage> {
   bool _showTranslation = true;
   String _level = 'Simple';
   String? _error;
+  String? _conversationId;
 
   @override
   void dispose() {
@@ -55,6 +56,7 @@ class _PdfTranslatorPageState extends State<PdfTranslatorPage> {
         _error = null;
         _translations = [];
         _pageBytes = null;
+        _conversationId = null;
       });
       final opened = await PdfDocument.openData(selected.bytes!);
       if (opened.pagesCount > 80) {
@@ -126,6 +128,7 @@ class _PdfTranslatorPageState extends State<PdfTranslatorPage> {
         headers: {'Authorization': 'Bearer ${session.accessToken}'},
         body: {
           'task': 'translate_page',
+          if (_conversationId != null) 'conversationId': _conversationId,
           'question': 'Translate this PDF page into ${_level == 'Simple' ? 'very simple student-friendly Arabic' : _level == 'University' ? 'clear university-level Arabic' : 'precise Arabic while preserving academic terminology'}. Return only the requested JSON translations with normalized bounding boxes.',
           'retrieve': false,
           'imageMimeType': 'image/png',
@@ -134,6 +137,7 @@ class _PdfTranslatorPageState extends State<PdfTranslatorPage> {
       );
       final data = Map<String, dynamic>.from(response.data as Map);
       if (data['error'] != null) throw Exception(data['error'].toString());
+      _conversationId = data['conversationId']?.toString() ?? _conversationId;
       final raw = (data['answer'] ?? '').toString().trim();
       final start = raw.indexOf('{');
       final end = raw.lastIndexOf('}');
