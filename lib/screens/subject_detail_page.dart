@@ -7,9 +7,9 @@ import '../backend.dart';
 class RedesignedSubjectDetailPage extends StatefulWidget {
   final Map<String,dynamic> subject;
   const RedesignedSubjectDetailPage({super.key,required this.subject});
-  @override State<SubjectDetailPage> createState()=>_SubjectDetailPageState();
+  @override State<RedesignedSubjectDetailPage> createState()=>_SubjectDetailPageState();
 }
-class _SubjectDetailPageState extends State<SubjectDetailPage>{
+class _SubjectDetailPageState extends State<RedesignedSubjectDetailPage> {
   late Future<Map<String,List<Map<String,dynamic>>>> future;
   @override void initState(){super.initState();future=_load();}
   Future<Map<String,List<Map<String,dynamic>>>> _load() async{
@@ -30,7 +30,7 @@ class _SubjectDetailPageState extends State<SubjectDetailPage>{
       return ListView(padding:const EdgeInsets.fromLTRB(16,12,16,36),children:[
         Container(padding:const EdgeInsets.all(18),decoration:BoxDecoration(gradient:LinearGradient(colors:[cs.primary.withValues(alpha:.13),cs.secondary.withValues(alpha:.07)]),borderRadius:BorderRadius.circular(24),border:Border.all(color:cs.primary.withValues(alpha:.13))),child:Row(children:[
           Container(width:46,height:46,decoration:BoxDecoration(color:cs.primary.withValues(alpha:.13),borderRadius:BorderRadius.circular(15)),child:Icon(Icons.menu_book_rounded,color:cs.primary)),const SizedBox(width:12),
-          Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(name,style:const TextStyle(fontSize:20,fontWeight:FontWeight.w900)),const SizedBox(height:3),Text(${lectures.length}+' lectures',style:TextStyle(color:cs.onSurfaceVariant,fontSize:10.5))]))
+          Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(name,style:const TextStyle(fontSize:20,fontWeight:FontWeight.w900)),const SizedBox(height:3),Text('${lectures.length} lectures',style:TextStyle(color:cs.onSurfaceVariant,fontSize:10.5))]))
         ])),
         const SizedBox(height:14),
         Container(padding:const EdgeInsets.all(14),decoration:BoxDecoration(color:Theme.of(context).cardColor,borderRadius:BorderRadius.circular(20),border:Border.all(color:cs.outlineVariant.withValues(alpha:.55))),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
