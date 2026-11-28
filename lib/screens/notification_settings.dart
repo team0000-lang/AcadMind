@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../notification_service.dart';
+import '../services.dart';
 
 class NotificationSettingsPage extends StatefulWidget {
   const NotificationSettingsPage({super.key});
@@ -58,14 +59,24 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
     await p.setInt('notification_reminder_minutes', minutes);
 
     try {
+      // Apply the new reminder preferences immediately instead of waiting
+      // for the next app restart/resume.
+      final schedule = await AcadMindData.schedule();
+      await NotificationService.instance.syncSchedule(schedule);
       await NotificationService.instance.initialize();
-    } catch (_) {}
 
-    if (!mounted) return;
-    setState(() => saving = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('تم حفظ إعدادات الإشعارات')),
-    );
+      if (!mounted) return;
+      setState(() => saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم حفظ الإعدادات وتحديث مواعيد التنبيهات')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('تم حفظ الإعدادات، لكن تعذر تحديث التنبيهات: $error')),
+      );
+    }
   }
 
   Widget _section(String title, String subtitle) => Padding(
