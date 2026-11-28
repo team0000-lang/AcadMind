@@ -44,6 +44,21 @@ class NotificationService {
     return prefs.getInt('notification_reminder_minutes') ?? 10;
   }
 
+  Future<bool> isNotificationTypeEnabled(String type) async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = switch (type) {
+      'announcement' => 'notification_announcements_enabled',
+      'material' => 'notification_materials_enabled',
+      'lecture' => 'notification_lectures_enabled',
+      'video' => 'notification_videos_enabled',
+      'update' => 'notification_updates_enabled',
+      'exam' || 'assignment' || 'deadline' || 'quiz' =>
+        'notification_academic_events_enabled',
+      _ => null,
+    };
+    return key == null ? true : (prefs.getBool(key) ?? true);
+  }
+
   Future<void> _cancelStoredIds(String key) async {
     final prefs = await SharedPreferences.getInstance();
     final ids = prefs.getStringList(key) ?? const <String>[];
