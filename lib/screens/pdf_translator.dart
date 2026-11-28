@@ -68,6 +68,7 @@ class _PdfTranslatorPageState extends State<PdfTranslatorPage> {
       _file = selected;
       _pageCount = opened.pagesCount;
       _page = 1;
+      await _loadRatio();
       await _renderPage();
     } catch (e) {
       if (mounted) setState(() {
@@ -179,15 +180,14 @@ class _PdfTranslatorPageState extends State<PdfTranslatorPage> {
   Widget _pagePreview() {
     final bytes = _pageBytes;
     if (bytes == null) return const SizedBox.shrink();
-    return LayoutBuilder(builder: (context, constraints) {
-      final image = Image.memory(bytes, fit: BoxFit.contain);
-      return Center(
-        child: AspectRatio(
-          aspectRatio: _imageAspectRatio(bytes),
-          child: Stack(
+    return Center(
+      child: AspectRatio(
+        aspectRatio: _imageAspectRatio(bytes),
+        child: LayoutBuilder(builder: (context, constraints) {
+          return Stack(
             fit: StackFit.expand,
             children: [
-              image,
+              Image.memory(bytes, fit: BoxFit.fill),
               if (_showTranslation)
                 ..._translations.map((item) {
                   final left = (item['x'] as num).toDouble() / 1000;
@@ -201,7 +201,7 @@ class _PdfTranslatorPageState extends State<PdfTranslatorPage> {
                     height: math.max(13, constraints.maxHeight * height),
                     child: Container(
                       alignment: Alignment.center,
-                      padding: const EdgeInsets.symmetric(horizontal: 1, vertical: 0),
+                      padding: const EdgeInsets.symmetric(horizontal: 1),
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: .97),
                         border: Border.all(color: const Color(0x33265A53), width: .5),
@@ -227,10 +227,10 @@ class _PdfTranslatorPageState extends State<PdfTranslatorPage> {
                   );
                 }),
             ],
-          ),
-        ),
-      );
-    });
+          );
+        }),
+      ),
+    );
   }
 
   double _imageAspectRatio(Uint8List bytes) {
