@@ -17,6 +17,8 @@ import 'study_tools.dart';
 import 'student_setup_screen.dart';
 import 'academic_hub.dart';
 import '../app_preferences.dart';
+import 'notification_center.dart';
+import 'notification_settings.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -24,13 +26,15 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int tab = 0;
   bool owner = false;
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadRole();
+    _syncScheduleNotifications();
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => UpdateService.check(context),
     );
@@ -43,9 +47,30 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (_) {}
   }
 
+  Future<void> _syncScheduleNotifications() async {
+    try {
+      final rows = await AcadMindData.schedule();
+      await NotificationService.instance.syncSchedule(rows);
+    } catch (_) {}
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _syncScheduleNotifications();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
   Future<void> refresh() async {
     setState(() {});
     _loadRole();
+    _syncScheduleNotifications();
   }
 
   @override
@@ -286,29 +311,7 @@ class DashboardPage extends StatelessWidget {
                   ],
                 ),
                 const Spacer(),
-                Material(
-                  color: Theme.of(context).cardColor,
-                  borderRadius: BorderRadius.circular(14),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(14),
-                    onTap: () => onNavigate(3),
-                    child: Container(
-                      width: 43,
-                      height: 43,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: colors.outlineVariant.withValues(alpha: .65),
-                        ),
-                      ),
-                      child: Icon(
-                        Icons.notifications_none_rounded,
-                        color: colors.onSurface,
-                        size: 21,
-                      ),
-                    ),
-                  ),
-                ),
+                _NotificationBell(onNavigate: onNavigate),
               ],
             ),
             const SizedBox(height: 27),
@@ -1126,195 +1129,11 @@ class SubjectsPage extends StatelessWidget {
 }
 
 class SubjectDetailPage extends StatelessWidget {
-  final Map<String, dynamic> subject;
-  const SubjectDetailPage({super.key, required this.subject});
-
-  Future<Map<String, List<Map<String, dynamic>>>> loadContent() async {
-    final id = subject['id'];
-    final lectures = await supabase
-        .from('lectures')
-        .select('id,title,topic,description,notes,lecture_number')
-        .eq('subject_id', id)
-        .eq('is_active', true)
-        .order('display_order');
-    final videos = await supabase
-        .from('youtube_resources')
-        .select('id,title,youtube_url,lecture_id,description,channel')
-        .eq('subject_id', id)
-        .eq('is_active', true)
-        .isFilter('deleted_at', null)
-        .order('display_order');
-    final folders = await supabase
-        .from('drive_folders')
-        .select('id,folder_name,folder_url,description')
-        .eq('subject_id', id)
-        .eq('is_active', true)
-        .order('display_order');
-    return {
-      'lectures': List<Map<String, dynamic>>.from(lectures),
-      'videos': List<Map<String, dynamic>>.from(videos),
-      'folders': List<Map<String, dynamic>>.from(folders),
-    };
-  }
-
-  Future<void> openLink(BuildContext context, String value) async {
-    final uri = Uri.tryParse(value.trim());
-    if (uri == null || uri.scheme != 'https') {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('الرابط غير صالح')));
-      }
-      return;
-    }
-    try {
-      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (!opened && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'تعذر فتح الرابط. تأكد من وجود التطبيق أو المتصفح المناسب.',
-            ),
-          ),
-        );
-      }
-    } catch (error) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('تعذر فتح الرابط: $error')));
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext c) => Scaffold(
-        appBar:
-            AppBar(title: Text((subject['name_en'] ?? 'Subject') as String)),
-        body: FutureBuilder<Map<String, List<Map<String, dynamic>>>>(
-          future: loadContent(),
-          builder: (c, s) {
-            if (s.hasError)
-              return _ErrorBox(message: 'تعذر تحميل محتوى المادة: ${s.error}');
-            if (!s.hasData)
-              return const Center(child: CircularProgressIndicator());
-            final data = s.data!;
-            final generalVideos = data['videos']!
-                .where((item) => item['lecture_id'] == null)
-                .toList();
-            return ListView(
-              padding: const EdgeInsets.all(12),
-              children: [
-                const Text(
-                  'المحاضرات',
-                  style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold),
-                ),
-                if (data['lectures']!.isEmpty)
-                  const _EmptyBox(text: 'لا توجد محاضرات مضافة بعد'),
-                ...data['lectures']!.map((lecture) {
-                  final linkedVideos = data['videos']!
-                      .where((video) => video['lecture_id'] == lecture['id'])
-                      .toList();
-                  return Card(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          ListTile(
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 7,
-                            ),
-                            leading: const Icon(Icons.menu_book_rounded),
-                            title: Text(
-                              lecture['title'] as String,
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.w800),
-                            ),
-                            subtitle: Text(
-                              (lecture['topic'] ?? lecture['description'] ?? '')
-                                  as String,
-                            ),
-                          ),
-                          if (linkedVideos.isNotEmpty) ...[
-                            const Divider(height: 1),
-                            ...linkedVideos.map(
-                              (video) => ListTile(
-                                dense: true,
-                                leading: const Icon(
-                                  Icons.play_circle_fill_rounded,
-                                  color: Color(0xFFDF4545),
-                                ),
-                                title: Text(
-                                  video['title'] as String,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                subtitle: Text(
-                                  (video['channel'] ?? 'فيديو شرح المحاضرة')
-                                      .toString(),
-                                ),
-                                trailing: const Icon(
-                                  Icons.open_in_new_rounded,
-                                  size: 18,
-                                ),
-                                onTap: () =>
-                                    openLink(c, video['youtube_url'] as String),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  );
-                }),
-                const Divider(height: 32),
-                const Text(
-                  'فيديوهات إضافية للمادة',
-                  style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold),
-                ),
-                if (generalVideos.isEmpty)
-                  const _EmptyBox(
-                      text: 'لا توجد فيديوهات إضافية خارج المحاضرات'),
-                ...generalVideos.map(
-                  (e) => Card(
-                    child: ListTile(
-                      leading: const Icon(
-                        Icons.play_circle_outline_rounded,
-                        color: Color(0xFFDF4545),
-                      ),
-                      title: Text(e['title'] as String),
-                      subtitle: Text(
-                        (e['channel'] ?? e['description'] ?? '') as String,
-                      ),
-                      trailing: const Icon(Icons.open_in_new_rounded),
-                      onTap: () => openLink(c, e['youtube_url'] as String),
-                    ),
-                  ),
-                ),
-                const Divider(height: 32),
-                const Text(
-                  'ملفات ومجلدات المادة',
-                  style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold),
-                ),
-                if (data['folders']!.isEmpty)
-                  const _EmptyBox(text: 'لا توجد روابط ملفات مضافة بعد'),
-                ...data['folders']!.map(
-                  (e) => Card(
-                    child: ListTile(
-                      leading: const Icon(Icons.folder_open),
-                      title: Text(e['folder_name'] as String),
-                      subtitle: Text((e['description'] ?? '') as String),
-                      trailing: const Icon(Icons.open_in_new),
-                      onTap: () => openLink(c, e['folder_url'] as String),
-                    ),
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
-      );
+  final Map<String,dynamic> subject;
+  const SubjectDetailPage({super.key,required this.subject});
+  @override Widget build(BuildContext context) => RedesignedSubjectDetailPage(subject: subject);
 }
+
 
 class SchedulePage extends StatefulWidget {
   const SchedulePage({super.key});
@@ -1680,6 +1499,114 @@ class _SchedulePageState extends State<SchedulePage> {
                         ),
             ),
           ],
+        );
+      },
+    );
+  }
+}
+
+class _NotificationBell extends StatefulWidget {
+  final ValueChanged<int> onNavigate;
+  const _NotificationBell({required this.onNavigate});
+
+  @override
+  State<_NotificationBell> createState() => _NotificationBellState();
+}
+
+class _NotificationBellState extends State<_NotificationBell> {
+  Future<int> _unreadCount() async {
+    final uid = supabase.auth.currentUser?.id;
+    if (uid == null) return 0;
+    final rows = await supabase
+        .from('user_notifications')
+        .select('id,type')
+        .eq('user_id', uid)
+        .eq('is_read', false)
+        .limit(100);
+    var count = 0;
+    for (final row in rows) {
+      if (await NotificationService.instance
+          .isNotificationTypeEnabled((row['type'] ?? 'general').toString())) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  void _open() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => NotificationCenterPage(onNavigate: widget.onNavigate),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return FutureBuilder<int>(
+      future: _unreadCount(),
+      builder: (context, snapshot) {
+        final count = snapshot.data ?? 0;
+        return Material(
+          color: Theme.of(context).cardColor,
+          borderRadius: BorderRadius.circular(14),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: _open,
+            child: Container(
+              width: 43,
+              height: 43,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: colors.outlineVariant.withValues(alpha: .65),
+                ),
+              ),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Center(
+                    child: Icon(
+                      count > 0
+                          ? Icons.notifications_rounded
+                          : Icons.notifications_none_rounded,
+                      color: colors.onSurface,
+                      size: 21,
+                    ),
+                  ),
+                  if (count > 0)
+                    Positioned(
+                      right: -3,
+                      top: -5,
+                      child: Container(
+                        constraints:
+                            const BoxConstraints(minWidth: 17, minHeight: 17),
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        decoration: BoxDecoration(
+                          color: colors.error,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: Theme.of(context).scaffoldBackgroundColor,
+                            width: 2,
+                          ),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          count > 9 ? '9+' : '$count',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 8,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
         );
       },
     );
@@ -3557,6 +3484,25 @@ class _ProfilePageState extends State<ProfilePage> {
                         },
                       ),
                     ],
+                  ),
+                ),
+              ),
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.notifications_active_outlined),
+                  title: const Text(
+                    'إعدادات الإشعارات',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  subtitle: const Text(
+                    'وقت تذكير المحاضرات وإشعارات المحتوى والتحديثات',
+                  ),
+                  trailing: const Icon(Icons.chevron_left_rounded),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const NotificationSettingsPage(),
+                    ),
                   ),
                 ),
               ),

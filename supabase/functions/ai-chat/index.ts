@@ -30,7 +30,7 @@ async function generateWithModel(model: string, key: string, contents: unknown[]
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: systemInstruction }] },
       contents,
-      generationConfig: { temperature: 0.25, maxOutputTokens: 1100 },
+      generationConfig: { temperature: 0.2, maxOutputTokens: 3000 },
     }),
     signal: AbortSignal.timeout(20_000),
   });
@@ -95,8 +95,8 @@ const taskInstructions: Record<string, string> = {
   chat: "Answer as a patient academic tutor. Explain concepts clearly and step by step.",
   explain: "Explain the requested concept from first principles. Use simple language, examples, and a short recap.",
   summarize: "Create a faithful, structured summary. Preserve key definitions, facts, formulas, and distinctions. Do not invent information.",
-  quiz: "Create a useful quiz from the supplied material. Include a mix of question types and provide answers with brief explanations after the questions.",
-  flashcards: "Create concise study flashcards in question-and-answer form. Focus on high-value concepts and avoid duplicate cards.",
+  quiz: "Generate the exact number of questions requested by the student, grounded only in supplied course material. Return ONLY valid JSON, no Markdown fences, using exactly this schema: {\"title\":\"Quiz title\",\"questions\":[{\"question\":\"...\",\"options\":[\"A\",\"B\",\"C\",\"D\"],\"answer\":\"exact option text\",\"explanation\":\"...\"}]}. Every answer must exactly match one option. Include plausible distractors and concise explanations.",
+  flashcards: "Create 12 concise study flashcards grounded only in supplied course material. Return ONLY valid JSON, no Markdown fences, using exactly this schema: {\"title\":\"Deck title\",\"cards\":[{\"front\":\"question or concept\",\"back\":\"accurate answer\"}]}. Avoid duplicates and keep each card focused.",
   planner: "Create a realistic study plan with ordered tasks, estimated durations, breaks, and review sessions.",
   pdf: "Analyze the supplied document context. Explain its structure, main ideas, important terms, and answer the user's question using only supported details.",
   analytics: "Interpret the supplied study/progress data carefully. Identify trends and practical next steps. Do not invent missing metrics.",
@@ -192,7 +192,7 @@ Deno.serve(async (request) => {
         try {
           const vector = await embedQuery(body.question.trim());
           const { data: matches, error } = await userClient.rpc("match_knowledge_chunks", {
-            query_embedding: JSON.stringify(vector), match_count: 5,
+            query_embedding: JSON.stringify(vector), match_count: 3,
             filter_subject: body.subjectId, filter_lecture: body.lectureId ?? null,
           });
           if (error) throw new Error("Knowledge retrieval failed");
@@ -202,7 +202,7 @@ Deno.serve(async (request) => {
           }));
           context = (matches ?? []).map((row: Record<string, unknown>, i: number) =>
             `[Source ${i + 1}: ${row.document_name ?? "Course document"}${row.page_number ? `, page ${row.page_number}` : ""}]\n${String(row.content).slice(0, 3500)}`
-          ).join("\n\n").slice(0, 11000);
+          ).join("\n\n").slice(0, 8000);
         } catch (retrievalError) {
           // If indexed course material exists, never silently downgrade to an
           // unsupported general answer when retrieval fails.
