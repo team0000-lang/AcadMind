@@ -17,6 +17,8 @@ import 'study_tools.dart';
 import 'student_setup_screen.dart';
 import 'academic_hub.dart';
 import '../app_preferences.dart';
+import 'notification_center.dart';
+import 'notification_settings.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -291,7 +293,14 @@ class DashboardPage extends StatelessWidget {
                   borderRadius: BorderRadius.circular(14),
                   child: InkWell(
                     borderRadius: BorderRadius.circular(14),
-                    onTap: () => onNavigate(3),
+                    onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => NotificationCenterPage(
+                            onNavigate: onNavigate,
+                          ),
+                        ),
+                      ),
                     child: Container(
                       width: 43,
                       height: 43,
@@ -3373,6 +3382,25 @@ class _ProfilePageState extends State<ProfilePage> {
                         },
                       ),
                     ],
+                  ),
+                ),
+              ),
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.notifications_active_outlined),
+                  title: const Text(
+                    'إعدادات الإشعارات',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  subtitle: const Text(
+                    'وقت تذكير المحاضرات وإشعارات المحتوى والتحديثات',
+                  ),
+                  trailing: const Icon(Icons.chevron_left_rounded),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const NotificationSettingsPage(),
+                    ),
                   ),
                 ),
               ),
