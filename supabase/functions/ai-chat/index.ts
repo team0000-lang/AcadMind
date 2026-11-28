@@ -192,7 +192,7 @@ Deno.serve(async (request) => {
         try {
           const vector = await embedQuery(body.question.trim());
           const { data: matches, error } = await userClient.rpc("match_knowledge_chunks", {
-            query_embedding: JSON.stringify(vector), match_count: 5,
+            query_embedding: JSON.stringify(vector), match_count: 3,
             filter_subject: body.subjectId, filter_lecture: body.lectureId ?? null,
           });
           if (error) throw new Error("Knowledge retrieval failed");
@@ -202,7 +202,7 @@ Deno.serve(async (request) => {
           }));
           context = (matches ?? []).map((row: Record<string, unknown>, i: number) =>
             `[Source ${i + 1}: ${row.document_name ?? "Course document"}${row.page_number ? `, page ${row.page_number}` : ""}]\n${String(row.content).slice(0, 3500)}`
-          ).join("\n\n").slice(0, 11000);
+          ).join("\n\n").slice(0, 8000);
         } catch (retrievalError) {
           // If indexed course material exists, never silently downgrade to an
           // unsupported general answer when retrieval fails.
