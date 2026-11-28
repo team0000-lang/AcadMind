@@ -197,8 +197,8 @@ class _PdfTranslatorPageState extends State<PdfTranslatorPage> {
                   return Positioned(
                     left: constraints.maxWidth * left,
                     top: constraints.maxHeight * top,
-                    width: math.max(18, constraints.maxWidth * width),
-                    height: math.max(13, constraints.maxHeight * height),
+                    width: math.max(18, constraints.maxWidth * width).toDouble(),
+                    height: math.max(13, constraints.maxHeight * height).toDouble(),
                     child: Container(
                       alignment: Alignment.center,
                       padding: const EdgeInsets.symmetric(horizontal: 1),
