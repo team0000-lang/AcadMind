@@ -4,9 +4,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../backend.dart';
 
-class SubjectDetailPage extends StatefulWidget {
+class RedesignedSubjectDetailPage extends StatefulWidget {
   final Map<String,dynamic> subject;
-  const SubjectDetailPage({super.key,required this.subject});
+  const RedesignedSubjectDetailPage({super.key,required this.subject});
   @override State<SubjectDetailPage> createState()=>_SubjectDetailPageState();
 }
 class _SubjectDetailPageState extends State<SubjectDetailPage>{
