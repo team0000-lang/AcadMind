@@ -776,6 +776,16 @@ class _SubjectsAdminState extends State<SubjectsAdmin> {
             })
             .select('id')
             .single();
+        await _notifyProfiles(
+          type: 'lecture',
+          title: 'محاضرة جديدة',
+          body: 'تمت إضافة Lecture جديدة في ${s['name_en']}: ${v[0]}',
+          route: '/lecture',
+          data: {'lecture_id': lecture['id'], 'subject_id': s['id']},
+          academicYearId: s['academic_year_id']?.toString(),
+          groupId: s['group_id']?.toString(),
+          sectionId: s['section_id']?.toString(),
+        );
         if (v[5].isNotEmpty) {
           await supabase.from('youtube_resources').insert({
             'subject_id': s['id'],
@@ -786,6 +796,16 @@ class _SubjectsAdminState extends State<SubjectsAdmin> {
             'description': 'فيديو الشرح المرتبط بمحاضرة ${v[0]}',
             'is_active': true,
           });
+          await _notifyProfiles(
+            type: 'video',
+            title: 'شرح YouTube جديد',
+            body: 'تمت إضافة شرح جديد لـ ${s['name_en']}',
+            route: '/lecture',
+            data: {'lecture_id': lecture['id'], 'subject_id': s['id']},
+            academicYearId: s['academic_year_id']?.toString(),
+            groupId: s['group_id']?.toString(),
+            sectionId: s['section_id']?.toString(),
+          );
         }
       });
   Future<void> _addYoutube(Map s) async {
@@ -908,6 +928,45 @@ class _SubjectsAdminState extends State<SubjectsAdmin> {
     description.dispose();
   }
 
+  Future<void> _notifyProfiles({
+    required String type,
+    required String title,
+    required String body,
+    String? route,
+    Map<String, dynamic>? data,
+    String? academicYearId,
+    String? groupId,
+    String? sectionId,
+  }) async {
+    try {
+      final profiles =
+          List<Map<String, dynamic>>.from(await supabase
+              .from('profiles')
+              .select('id,academic_year_id,group_id,section_id,role')
+              .neq('role', 'owner'));
+      final targets = profiles.where((p) {
+        if (academicYearId != null &&
+            p['academic_year_id']?.toString() != academicYearId) return false;
+        if (groupId != null && p['group_id']?.toString() != groupId) return false;
+        if (sectionId != null && p['section_id']?.toString() != sectionId) return false;
+        return true;
+      }).toList();
+      if (targets.isEmpty) return;
+      await supabase.from('user_notifications').insert(
+        targets.map((p) => {
+          'user_id': p['id'],
+          'type': type,
+          'title': title,
+          'body': body,
+          'route': route,
+          'data': data ?? <String, dynamic>{},
+        }).toList(),
+      );
+    } catch (_) {
+      // Notification delivery must never block owner content creation.
+    }
+  }
+
   Future<void> _addDrive(Map s) async {
     await _simpleForm('إضافة رابط ملفات المادة', [
       ('اسم الملف أو المجلد', 'text'),
@@ -926,6 +985,16 @@ class _SubjectsAdminState extends State<SubjectsAdmin> {
         'description': v[2].isEmpty ? null : v[2],
         'is_active': true,
       });
+      await _notifyProfiles(
+        type: 'material',
+        title: 'مادة جديدة',
+        body: 'تمت إضافة Material جديدة إلى ${s['name_en']}: ${v[0]}',
+        route: '/material',
+        data: {'subject_id': s['id']},
+        academicYearId: s['academic_year_id']?.toString(),
+        groupId: s['group_id']?.toString(),
+        sectionId: s['section_id']?.toString(),
+      );
     });
   }
 
@@ -1603,6 +1672,12 @@ class _AnnouncementsAdminState extends State<AnnouncementsAdmin> {
         'priority': 2,
         'is_active': true
       });
+      await _notifyProfiles(
+        type: 'announcement',
+        title: title.text.trim(),
+        body: content.text.trim(),
+        route: '/announcements',
+      );
       title.clear();
       content.clear();
       reload();
