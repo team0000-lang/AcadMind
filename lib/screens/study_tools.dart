@@ -153,6 +153,8 @@ class ToolWorkspacePage extends StatefulWidget {
   @override State<ToolWorkspacePage> createState()=>_ToolWorkspacePageState();
 }
 class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
+  static final Map<String, List<Map<String,dynamic>>> _subjectCache = {};
+  static final Map<String, Future<List<Map<String,dynamic>>>> _subjectRequests = {};
   final controller=TextEditingController();
   bool busy=false;
   bool loadingSubjects=true;
@@ -174,13 +176,38 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
   PlatformFile? pdfFile;
   @override void initState(){super.initState();if (widget.initialPrompt != null) controller.text = widget.initialPrompt!;loadSubjects();}
   Future<void> loadSubjects() async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) {
+      if (mounted) setState(() => loadingSubjects = false);
+      return;
+    }
+    final cached = _subjectCache[userId];
+    if (cached != null) {
+      if (mounted) setState(() {
+        subjects = cached;
+        loadingSubjects = false;
+      });
+      return;
+    }
     try {
-      final rows=await supabase.from('subjects').select('id,name_en').eq('is_active',true).isFilter('deleted_at',null).order('name_en');
-      if(!mounted)return;
-      setState(()=>subjects=List<Map<String,dynamic>>.from(rows));
+      final request = _subjectRequests.putIfAbsent(userId, () async {
+        final rows = await supabase
+            .from('subjects')
+            .select('id,name_en')
+            .eq('is_active', true)
+            .isFilter('deleted_at', null)
+            .order('name_en');
+        return List<Map<String,dynamic>>.from(rows);
+      });
+      final rows = await request;
+      _subjectCache[userId] = rows;
+      if (mounted) setState(() => subjects = rows);
     } catch (_) {
-      if(mounted) setState(()=>subjects=[]);
-    } finally { if(mounted)setState(()=>loadingSubjects=false); }
+      _subjectRequests.remove(userId);
+      if (mounted) setState(() => subjects = []);
+    } finally {
+      if (mounted) setState(() => loadingSubjects = false);
+    }
   }
   @override void dispose(){controller.dispose();super.dispose();}
   String _toolSettingsPrompt() {
