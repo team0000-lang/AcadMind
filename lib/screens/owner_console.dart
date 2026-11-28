@@ -1676,6 +1676,32 @@ class _KnowledgeAdminState extends State<KnowledgeAdmin> {
       });
 }
 
+Future<void> _notifyAnnouncementRecipients({
+  required String type,
+  required String title,
+  required String body,
+  String? route,
+  Map<String, dynamic>? data,
+}) async {
+  try {
+    final profiles = List<Map<String, dynamic>>.from(await supabase
+        .from('profiles')
+        .select('id,role')
+        .neq('role', 'owner'));
+    if (profiles.isEmpty) return;
+    await supabase.from('user_notifications').insert(profiles.map((profile) => {
+      'user_id': profile['id'],
+      'type': type,
+      'title': title,
+      'body': body,
+      'route': route,
+      'data': data ?? <String, dynamic>{},
+    }).toList());
+  } catch (_) {
+    // Notification delivery must not block announcement publishing.
+  }
+}
+
 class AnnouncementsAdmin extends StatefulWidget {
   final VoidCallback onChanged;
   const AnnouncementsAdmin({super.key, required this.onChanged});
@@ -1722,7 +1748,7 @@ class _AnnouncementsAdminState extends State<AnnouncementsAdmin> {
         'priority': 2,
         'is_active': true
       });
-      await _notifyProfiles(
+      await _notifyAnnouncementRecipients(
         type: 'announcement',
         title: title.text.trim(),
         body: content.text.trim(),
