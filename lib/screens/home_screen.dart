@@ -19,6 +19,7 @@ import 'academic_hub.dart';
 import '../app_preferences.dart';
 import 'notification_center.dart';
 import 'notification_settings.dart';
+import 'subject_detail_page.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
