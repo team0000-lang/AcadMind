@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../backend.dart';
+import '../notification_service.dart';
 
 class NotificationCenterPage extends StatefulWidget {
   final ValueChanged<int>? onNavigate;
@@ -24,7 +25,15 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
         .select('id,type,title,body,route,data,is_read,created_at')
         .order('created_at', ascending: false)
         .limit(100);
-    return List<Map<String, dynamic>>.from(rows);
+    final all = List<Map<String, dynamic>>.from(rows);
+    final visible = <Map<String, dynamic>>[];
+    for (final row in all) {
+      final type = (row['type'] ?? 'general').toString();
+      if (await NotificationService.instance.isNotificationTypeEnabled(type)) {
+        visible.add(row);
+      }
+    }
+    return visible;
   }
 
   Future<void> _markAll() async {
