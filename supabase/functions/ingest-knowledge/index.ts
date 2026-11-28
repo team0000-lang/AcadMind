@@ -83,7 +83,7 @@ Deno.serve(async (request) => {
   let body: { documentId?: unknown };
   try { body = await request.json(); } catch { return response({ error: "Invalid JSON" }, 400); }
   if (typeof body.documentId !== "string" || !/^[0-9a-f-]{36}$/i.test(body.documentId)) return response({ error: "Invalid documentId" }, 400);
-  const { data: doc, error: docError } = await client.from("knowledge_documents").select("id,subject_id,lecture_id,status,mime_type,storage_path").eq("id", body.documentId).maybeSingle();
+  const { data: doc, error: docError } = await client.from("knowledge_documents").select("id,subject_id,lecture_id,status,mime_type,storage_path,metadata").eq("id", body.documentId).maybeSingle();
   if (docError || !doc) return response({ error: "Document not found" }, 404);
   if (!doc.storage_path || doc.storage_path.startsWith("/") || doc.storage_path.includes("..")) return response({ error: "Invalid document storage path" }, 400);
   const { data: subject } = await client.from("subjects").select("id").eq("id", doc.subject_id).maybeSingle();
@@ -99,7 +99,7 @@ Deno.serve(async (request) => {
     if (downloadError || !file) throw new Error("Unable to download private course document");
     stage = "extract_text";
     const extracted = await extractText(file, doc.mime_type, doc.storage_path);
-    const cleaned = extracted.text.replaceAll("\\u0000", "").replace(/[\\t ]+\\n/g, "\\n").replace(/\\n{3,}/g, "\\n\\n").trim();
+    const cleaned = extracted.text.replaceAll("\u0000", "").replace(/[\t ]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
     stage = "validate_extracted_text";
     if (!cleaned) throw new Error("No selectable text was extracted. This PDF may be scanned; OCR is required before it can be indexed.");
     if (cleaned.length > 1_000_000) throw new Error("Extracted text exceeds the 1 MB processing limit");
@@ -141,7 +141,11 @@ Deno.serve(async (request) => {
     return response({ documentId: doc.id, chunks: chunks.length, pageCount: extracted.pageCount, status: "ready", provider: "Gemini" });
   } catch (error) {
     const detail = error instanceof Error ? error.message : "Unknown processing error";
-    const { error: statusError } = await client.from("knowledge_documents").update({ status: "failed" }).eq("id", doc.id);
+    const previousMetadata = doc.metadata && typeof doc.metadata === "object" ? doc.metadata as Record<string, unknown> : {};
+    const { error: statusError } = await client.from("knowledge_documents").update({
+      status: "failed",
+      metadata: { ...previousMetadata, last_error: detail.slice(0, 500), failed_stage: stage, failed_at: new Date().toISOString() },
+    }).eq("id", doc.id);
     console.error("ingest-knowledge failed", { stage, detail, statusUpdateFailed: !!statusError });
     return response({
       error: "Document processing failed. The file was not marked as ready.",
