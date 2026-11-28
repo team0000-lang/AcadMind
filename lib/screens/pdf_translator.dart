@@ -91,11 +91,12 @@ class _PdfTranslatorPageState extends State<PdfTranslatorPage> {
     PdfPage? page;
     try {
       page = await document.getPage(_page);
-      final scale = math.min(1600 / page.width, 1600 / page.height);
+      final scale = math.min(1440 / page.width, 1440 / page.height);
       final rendered = await page.render(
         width: math.max(1, (page.width * scale).round()).toDouble(),
         height: math.max(1, (page.height * scale).round()).toDouble(),
-        format: PdfPageImageFormat.png,
+        format: PdfPageImageFormat.jpeg,
+        quality: 82,
       );
       if (rendered == null) throw Exception('Page rendering failed');
       if (mounted) setState(() => _pageBytes = rendered.bytes);
@@ -114,7 +115,7 @@ class _PdfTranslatorPageState extends State<PdfTranslatorPage> {
       _message('سجّل الدخول وافتح ملف PDF أولاً.');
       return;
     }
-    if (bytes.length > 6 * 1024 * 1024) {
+    if (bytes.length > 4 * 1024 * 1024) {
       _message('حجم صورة الصفحة كبير. جرّب تصغير الصفحة أو استخدام ملف أخف.');
       return;
     }
@@ -131,7 +132,7 @@ class _PdfTranslatorPageState extends State<PdfTranslatorPage> {
           if (_conversationId != null) 'conversationId': _conversationId,
           'question': 'Translate this PDF page into ${_level == 'Simple' ? 'very simple student-friendly Arabic' : _level == 'University' ? 'clear university-level Arabic' : 'precise Arabic while preserving academic terminology'}. Return only the requested JSON translations with normalized bounding boxes.',
           'retrieve': false,
-          'imageMimeType': 'image/png',
+          'imageMimeType': 'image/jpeg',
           'imageBase64': base64Encode(bytes),
         },
       );
