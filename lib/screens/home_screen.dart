@@ -1519,11 +1519,18 @@ class _NotificationBellState extends State<_NotificationBell> {
     if (uid == null) return 0;
     final rows = await supabase
         .from('user_notifications')
-        .select('id')
+        .select('id,type')
         .eq('user_id', uid)
         .eq('is_read', false)
-        .limit(20);
-    return rows.length;
+        .limit(100);
+    var count = 0;
+    for (final row in rows) {
+      if (await NotificationService.instance
+          .isNotificationTypeEnabled((row['type'] ?? 'general').toString())) {
+        count++;
+      }
+    }
+    return count;
   }
 
   void _open() {
