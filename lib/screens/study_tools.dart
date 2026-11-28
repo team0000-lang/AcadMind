@@ -26,6 +26,11 @@ const _studyTools = <_StudyTool>[
   _StudyTool('Progress Analytics','راجع تقدمك وحدد ما يحتاج تحسيناً','حلّل تقرير الطالب التالي عن مذاكرته ونتائجه. استخرج نقاط القوة والضعف والمواد ذات الأولوية، ثم اقترح خطة تحسين قابلة للقياس. اعتمد فقط على البيانات التي أدخلها الطالب ولا تدّعِ أنها بيانات مسجلة تلقائياً:','اكتب درجاتك، ساعات مذاكرتك، والموضوعات التي تتقنها أو تجد صعوبة فيها...',Icons.insights_rounded,Color(0xFF339C9A)),
 ];
 
+void openStudyTool(BuildContext context, String title, {String? initialPrompt}) {
+  final tool = _studyTools.firstWhere((x) => x.title == title, orElse: () => _studyTools.first);
+  Navigator.of(context).push(MaterialPageRoute(builder: (_) => ToolWorkspacePage(tool: tool, initialPrompt: initialPrompt)));
+}
+
 class StudyToolsPage extends StatelessWidget {
   const StudyToolsPage({super.key});
   @override
@@ -143,7 +148,8 @@ class _ToolCard extends StatelessWidget {
 
 class ToolWorkspacePage extends StatefulWidget {
   final _StudyTool tool;
-  const ToolWorkspacePage({super.key,required this.tool});
+  final String? initialPrompt;
+  const ToolWorkspacePage({super.key,required this.tool,this.initialPrompt});
   @override State<ToolWorkspacePage> createState()=>_ToolWorkspacePageState();
 }
 class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
@@ -166,7 +172,7 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
   String quizDifficulty='Medium';
   int quizCount=8;
   PlatformFile? pdfFile;
-  @override void initState(){super.initState();loadSubjects();}
+  @override void initState(){super.initState();if(initialPrompt!=null)controller.text=initialPrompt!;loadSubjects();}
   Future<void> loadSubjects() async {
     try {
       final rows=await supabase.from('subjects').select('id,name_en').eq('is_active',true).isFilter('deleted_at',null).order('name_en');
@@ -258,9 +264,9 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
         'task':task,
         'subjectId':subjectId,
         'retrieve':subjectId!=null,
-        if(widget.tool.title=='PDF Analyzer' && pdfFile!=null) 'fileBase64':base64Encode(pdfFile!.bytes!),
-        if(widget.tool.title=='PDF Analyzer' && pdfFile!=null) 'fileMimeType':'application/pdf',
-        if(widget.tool.title=='PDF Analyzer' && pdfFile!=null) 'fileName':pdfFile!.name,
+        if(pdfFile!=null) 'fileBase64':base64Encode(pdfFile!.bytes!),
+        if(pdfFile!=null) 'fileMimeType':'application/pdf',
+        if(pdfFile!=null) 'fileName':pdfFile!.name,
       });
       final data=Map<String,dynamic>.from(result.data as Map);
       final text=(data['answer']??data['error']??'لم يصل رد من المساعد.').toString();
@@ -398,7 +404,7 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
         Text(widget.tool.title=='PDF Analyzer'?'محتوى ملف PDF':'المحتوى أو التفاصيل',style:const TextStyle(fontWeight:FontWeight.w800,fontSize:14)),
         const SizedBox(height:8),
         TextField(controller:controller,minLines:7,maxLines:14,textDirection:TextDirection.rtl,decoration:InputDecoration(hintText:widget.tool.hint,alignLabelWithHint:true)),
-        if(widget.tool.title=='PDF Analyzer')...[
+        if(true)...[
           const SizedBox(height:10),
           OutlinedButton.icon(onPressed:busy?null:pickPdf,icon:const Icon(Icons.upload_file_rounded),label:Text(pdfFile==null?'اختيار ملف PDF':'تغيير الملف: ${pdfFile!.name}')),
           if(pdfFile!=null) Text('تم اختيار ${pdfFile!.name} • ${(pdfFile!.size/1024/1024).toStringAsFixed(1)} MB',style:TextStyle(color:colors.onSurfaceVariant,fontSize:11)),
