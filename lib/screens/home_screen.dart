@@ -288,36 +288,7 @@ class DashboardPage extends StatelessWidget {
                   ],
                 ),
                 const Spacer(),
-                Material(
-                  color: Theme.of(context).cardColor,
-                  borderRadius: BorderRadius.circular(14),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(14),
-                    onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => NotificationCenterPage(
-                            onNavigate: onNavigate,
-                          ),
-                        ),
-                      ),
-                    child: Container(
-                      width: 43,
-                      height: 43,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: colors.outlineVariant.withValues(alpha: .65),
-                        ),
-                      ),
-                      child: Icon(
-                        Icons.notifications_none_rounded,
-                        color: colors.onSurface,
-                        size: 21,
-                      ),
-                    ),
-                  ),
-                ),
+                _NotificationBell(onNavigate: onNavigate),
               ],
             ),
             const SizedBox(height: 27),
@@ -1505,6 +1476,107 @@ class _SchedulePageState extends State<SchedulePage> {
                         ),
             ),
           ],
+        );
+      },
+    );
+  }
+}
+
+class _NotificationBell extends StatefulWidget {
+  final ValueChanged<int> onNavigate;
+  const _NotificationBell({required this.onNavigate});
+
+  @override
+  State<_NotificationBell> createState() => _NotificationBellState();
+}
+
+class _NotificationBellState extends State<_NotificationBell> {
+  Future<int> _unreadCount() async {
+    final uid = supabase.auth.currentUser?.id;
+    if (uid == null) return 0;
+    final rows = await supabase
+        .from('user_notifications')
+        .select('id')
+        .eq('user_id', uid)
+        .eq('is_read', false)
+        .limit(20);
+    return rows.length;
+  }
+
+  void _open() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => NotificationCenterPage(onNavigate: widget.onNavigate),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return FutureBuilder<int>(
+      future: _unreadCount(),
+      builder: (context, snapshot) {
+        final count = snapshot.data ?? 0;
+        return Material(
+          color: Theme.of(context).cardColor,
+          borderRadius: BorderRadius.circular(14),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: _open,
+            child: Container(
+              width: 43,
+              height: 43,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: colors.outlineVariant.withValues(alpha: .65),
+                ),
+              ),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Center(
+                    child: Icon(
+                      count > 0
+                          ? Icons.notifications_rounded
+                          : Icons.notifications_none_rounded,
+                      color: colors.onSurface,
+                      size: 21,
+                    ),
+                  ),
+                  if (count > 0)
+                    Positioned(
+                      right: -3,
+                      top: -5,
+                      child: Container(
+                        constraints:
+                            const BoxConstraints(minWidth: 17, minHeight: 17),
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        decoration: BoxDecoration(
+                          color: colors.error,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: Theme.of(context).scaffoldBackgroundColor,
+                            width: 2,
+                          ),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          count > 9 ? '9+' : '$count',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 8,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
         );
       },
     );
