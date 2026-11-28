@@ -26,13 +26,15 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int tab = 0;
   bool owner = false;
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadRole();
+    _syncScheduleNotifications();
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => UpdateService.check(context),
     );
@@ -45,9 +47,30 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (_) {}
   }
 
+  Future<void> _syncScheduleNotifications() async {
+    try {
+      final rows = await AcadMindData.schedule();
+      await NotificationService.instance.syncSchedule(rows);
+    } catch (_) {}
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _syncScheduleNotifications();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
   Future<void> refresh() async {
     setState(() {});
     _loadRole();
+    _syncScheduleNotifications();
   }
 
   @override
