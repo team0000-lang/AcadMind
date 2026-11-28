@@ -74,7 +74,7 @@ class StudyToolsPage extends StatelessWidget {
           },
         ),
         const SizedBox(height:14),
-        Text('يمكنك اختيار المادة لربط الأداة بمراجعها داخل مكتبة AI. يدعم PDF Analyzer رفع ملفات PDF حتى 15 MB، وتظهر مصادر المادة أسفل الإجابة عند استخدامها.',style:TextStyle(color:colors.onSurfaceVariant,fontSize:11,height:1.6)),
+        Text('يمكنك اختيار المادة لربط الأداة بمراجعها داخل مكتبة AI. كل أدوات الذكاء الاصطناعي تدعم إرفاق ملفات PDF حتى 15 MB، ويمكن ربط الأداة بمراجع المادة لإظهار المصادر عند استخدامها.',style:TextStyle(color:colors.onSurfaceVariant,fontSize:11,height:1.6)),
       ],
     );
   }
