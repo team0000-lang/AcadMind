@@ -237,8 +237,8 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
   }
   Future<void> generate()async{
     final value=controller.text.trim();
-    if(value.isEmpty && !(widget.tool.title=='PDF Analyzer' && pdfFile!=null)){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('اكتب المحتوى أو اختر ملف PDF أولاً')));return;}
-    if(widget.tool.title=='AI Study Assistant' && subjectId==null){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('اختر المادة أولاً حتى يستطيع المساعد الرجوع إلى ملفاتها ومصادرها.')));return;}
+    if(value.isEmpty && pdfFile==null){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('اكتب سؤالك أو اختر ملف PDF أولاً')));return;}
+    if(widget.tool.title=='AI Study Assistant' && subjectId==null && pdfFile==null){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('اختر المادة أو أرفق ملف PDF حتى يستطيع المساعد استخدام مصدر واضح للإجابة.')));return;}
     final session = supabase.auth.currentSession;
     if(session == null){
       setState(()=>answer='جلسة الدخول غير موجودة. سجّل الدخول مرة أخرى لاستخدام أدوات الذكاء الاصطناعي.');
