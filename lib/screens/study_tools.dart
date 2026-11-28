@@ -172,7 +172,7 @@ class _ToolWorkspacePageState extends State<ToolWorkspacePage>{
   String quizDifficulty='Medium';
   int quizCount=8;
   PlatformFile? pdfFile;
-  @override void initState(){super.initState();if(initialPrompt!=null)controller.text=initialPrompt!;loadSubjects();}
+  @override void initState(){super.initState();if (widget.initialPrompt != null) controller.text = widget.initialPrompt!;loadSubjects();}
   Future<void> loadSubjects() async {
     try {
       final rows=await supabase.from('subjects').select('id,name_en').eq('is_active',true).isFilter('deleted_at',null).order('name_en');
