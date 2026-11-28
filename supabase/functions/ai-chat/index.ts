@@ -135,12 +135,12 @@ Deno.serve(async (request) => {
   }
   let attachedImage: { mime_type: string; data: string } | null = null;
   if (body.imageBase64 !== undefined) {
-    if (body.imageMimeType !== "image/png" || typeof body.imageBase64 !== "string" ||
-      body.imageBase64.length < 100 || body.imageBase64.length > 9_000_000 ||
+    if (body.imageMimeType !== "image/jpeg" || typeof body.imageBase64 !== "string" ||
+      body.imageBase64.length < 100 || body.imageBase64.length > 6_000_000 ||
       !/^[A-Za-z0-9+/]+={0,2}$/.test(body.imageBase64)) {
       return json({ error: "Invalid page image. Render a smaller PDF page and try again." }, 400);
     }
-    attachedImage = { mime_type: "image/png", data: body.imageBase64 };
+    attachedImage = { mime_type: "image/jpeg", data: body.imageBase64 };
   }
   if (task === "translate_page" && !attachedImage) {
     return json({ error: "A rendered PDF page image is required for translation." }, 400);
